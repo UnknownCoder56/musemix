@@ -55,7 +55,7 @@ This application can be compiled into a native executable using GraalVM and Gluo
 2. **Set GRAALVM_HOME**: Update the `graalvmHome` path in `pom.xml` to point to your GraalVM installation:
 
 ```xml
-<graalvmHome>/path/to/your/graalvm</graalvmHome>
+<graalvmHome>/path/to/your/graalvm-installation</graalvmHome>
 ```
 
 ### Build Native Image
