@@ -57,7 +57,7 @@
                         <!-- Default configuration for running with: mvn clean javafx:run -->
                         <id>default-cli</id>
                         <configuration>
-                            <mainClass>com.uniqueapps.music/com.uniqueapps.musemixe.MusicApplication</mainClass>
+                            <mainClass>com.uniqueapps.musemixe/com.uniqueapps.musemixe.MusemixeApplication</mainClass>
                             <launcher>app</launcher>
                             <jlinkZipName>app</jlinkZipName>
                             <jlinkImageName>app</jlinkImageName>
@@ -73,7 +73,7 @@
                 <artifactId>gluonfx-maven-plugin</artifactId>
                 <version>1.0.23</version>
                 <configuration>
-                    <mainClass>com.uniqueapps.musemixe.MusicApplication</mainClass>
+                    <mainClass>com.uniqueapps.musemixe.MusemixeApplication</mainClass>
                     <graalvmHome>C:/Users/arpan/Downloads/graalvm-java23-windows-amd64-gluon-23+25.1-dev</graalvmHome>
                     <reflectionList>
                         <list>com.uniqueapps.musemixe.HomeController</list>
