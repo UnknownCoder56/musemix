@@ -33,6 +33,7 @@ public class MusemixeApplication extends Application {
     }
 
     public static void main(String[] args) {
+        System.setProperty("java.home", ".");
         launch();
     }
 }
