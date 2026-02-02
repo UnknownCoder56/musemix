@@ -4,6 +4,7 @@ import atlantafx.base.theme.PrimerDark;
 import javafx.application.Application;
 import javafx.fxml.FXMLLoader;
 import javafx.scene.Scene;
+import javafx.scene.image.Image;
 import javafx.stage.Stage;
 
 import java.io.IOException;
@@ -22,6 +23,7 @@ public class MusemixApplication extends Application {
         homeController = loader.getController();
         stage.setTitle("Musemix");
         stage.setScene(scene);
+        stage.getIcons().add(new Image(Objects.requireNonNull(MusemixApplication.class.getResourceAsStream("logo.png"))));
         stage.show();
     }
 
@@ -33,7 +35,7 @@ public class MusemixApplication extends Application {
     }
 
     public static void main(String[] args) {
-        System.setProperty("java.home", ".");
+        //System.setProperty("java.home", ".");
         launch();
     }
 }

@@ -1,3 +1,7 @@
+<p align="center">
+  <img src="src/main/resources/com/uniqueapps/musemix/logo.png" alt="Maxis Logo" width="500"/>
+</p>
+
 # Musemix
 
 A modern JavaFX application for accessing and playing any MIDI instrument available on your device, and a full-featured high performance composer to load, create, edit and save MIDI compositions.
