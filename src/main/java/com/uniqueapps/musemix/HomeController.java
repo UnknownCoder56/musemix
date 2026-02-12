@@ -1,11 +1,11 @@
 package com.uniqueapps.musemix;
 
-import com.google.gson.Gson;
-import com.google.gson.GsonBuilder;
 import javafx.animation.AnimationTimer;
 import javafx.application.Platform;
 import javafx.beans.Observable;
 import javafx.beans.binding.Bindings;
+import javafx.beans.property.IntegerProperty;
+import javafx.beans.property.SimpleIntegerProperty;
 import javafx.collections.FXCollections;
 import javafx.collections.ObservableList;
 import javafx.event.EventHandler;
@@ -17,6 +17,8 @@ import javafx.geometry.Pos;
 import javafx.scene.Node;
 import javafx.scene.control.*;
 import javafx.scene.control.skin.VirtualFlow;
+import javafx.scene.input.KeyCode;
+import javafx.scene.input.KeyEvent;
 import javafx.scene.input.MouseButton;
 import javafx.scene.input.MouseEvent;
 import javafx.scene.layout.*;
@@ -26,19 +28,9 @@ import javafx.scene.text.TextAlignment;
 import javafx.stage.FileChooser;
 import javafx.stage.Window;
 
-import javax.sound.midi.Instrument;
-import javax.sound.midi.MidiSystem;
-import javax.sound.midi.MidiUnavailableException;
-import javax.sound.midi.Synthesizer;
-import javax.sound.midi.Sequence;
-import javax.sound.midi.Track;
-import javax.sound.midi.MidiEvent;
-import javax.sound.midi.MidiMessage;
-import javax.sound.midi.ShortMessage;
-import javax.sound.midi.MetaMessage;
-import java.io.*;
+import javax.sound.midi.*;
+import java.io.File;
 import java.net.URL;
-import java.nio.file.Files;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.HashMap;
@@ -47,10 +39,18 @@ import java.util.Map;
 import java.util.TreeSet;
 import java.util.ResourceBundle;
 import java.util.concurrent.*;
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 
 public class HomeController implements Initializable, EventHandler<MouseEvent> {
 
+    // General UI variables
+    @FXML
+    private TabPane parentTabPane;
+
+    // Tester UI variables
+    @FXML
+    private Label instrumentLabel;
     @FXML
     private TextField instrument;
     @FXML
@@ -71,45 +71,77 @@ public class HomeController implements Initializable, EventHandler<MouseEvent> {
     private Button loopRandom;
     @FXML
     private CheckBox wait;
-    @FXML
-    private Label instrumentLabel;
-    @FXML
-    public Button scrollToPlayheadButton;
 
+    // Composer UI variables
     @FXML
-    public VBox noteHeaderColumn;
+    private VBox noteHeaderColumn;
     @FXML
     private ListView<Step> sequencerGrid;
     @FXML
     private Region playheadOverlay;
+    @FXML
+    private StackPane recordModeInstrumentChoiceBoxStackPane;
+    @FXML
+    private Label recordStepLabel;
+    @FXML
+    private Button playCompositionButton;
+    @FXML
+    private Button pauseCompositionButton;
+    @FXML
+    private Button resetTimelineButton;
+    @FXML
+    private Button scrollToPlayheadButton;
+    @FXML
+    private Button changeTempoButton;
+    @FXML
+    private Button addStepButton;
+    @FXML
+    private Button removeStepButton;
+    @FXML
+    private Button addRowButton;
+    @FXML
+    private Button removeRowButton;
+    @FXML
+    private Button recordModeButton;
+    @FXML
+    private Button exportMidiButton;
+    @FXML
+    private Button importMidiButton;
+    @FXML
+    private ChoiceBox<String> recordModeInstrumentChoiceBox;
 
+    // General variables (tester + composer)
     private int MAX_INSTRUMENTS = 0;
-    private static final int[] DEFAULT_NOTES = {60, 61, 62, 63, 64, 65, 66, 67, 68, 69, 70, 71, 72};
     private Instrument[] orchestra;
+
+    // For composer function
+    private static final int[] DEFAULT_NOTES = {60, 61, 62, 63, 64, 65, 66, 67, 68, 69, 70, 71, 72};
+    private final ObservableList<Step> steps = FXCollections.observableArrayList(step -> new Observable[]{step.cellsProperty()});
     private final ScheduledExecutorService scheduler = Executors.newSingleThreadScheduledExecutor(r -> {
         Thread t = new Thread(r, "timeline-thread");
         t.setDaemon(true);
         return t;
     });
     private ScheduledFuture<?> timelineFuture;
-    AtomicInteger playheadColumn = new AtomicInteger(0);
+    private final AtomicBoolean isPaused = new AtomicBoolean(true);
+    private final AtomicInteger playheadColumn = new AtomicInteger(0);
     private int tempo = 60;
-    private boolean scrollToPlayhead = false;
+    private boolean recordMode = false;
+
+    // For composer visuals
+    private static final double STEP_WIDTH = 100.0;
     private ScrollBar hBar;
     private VirtualFlow<ListCell<Step>> virtualFlow;
-    private final ObservableList<Step> steps = FXCollections.observableArrayList(step -> new Observable[]{step.cellsProperty()});
-
-    private static final double STEP_WIDTH = 100.0;
     private AnimationTimer playheadAnimator;
-    private boolean isPaused = true;
     private double stepDurationNanos;
-
-    private record Composition(int version, int tempo, List<Integer> notes, int steps, List<List<Integer>> grid, List<List<Integer>> durations) {}
+    private boolean scrollToPlayhead = false;
+    private final IntegerProperty recordColumn = new SimpleIntegerProperty(0);
 
     @SuppressWarnings("unchecked")
     @FXML
     @Override
     public void initialize(URL url, ResourceBundle resourceBundle) {
+        // Tester initialization
         StringBuilder sb = new StringBuilder();
         sb.append("Instruments:\n");
         try (Synthesizer synthesizer = MidiSystem.getSynthesizer()) {
@@ -127,6 +159,8 @@ public class HomeController implements Initializable, EventHandler<MouseEvent> {
         orchestraList.setText(sb.toString());
         instrumentLabel.setText("Instrument (0 - " + (MAX_INSTRUMENTS - 1) + " or " + InstrumentCellData.DRUM + ")");
 
+
+        // Composer initialization
         noteHeaderColumn.setStyle("-fx-border-color: gray; -fx-border-width: 1px;");
         sequencerGrid.setStyle("-fx-border-color: gray; -fx-border-width: 1px;");
         Label labelRC = new Label("Note/Step");
@@ -143,6 +177,7 @@ public class HomeController implements Initializable, EventHandler<MouseEvent> {
             index.getAndIncrement();
         });
 
+        // Sequencer grid initialization with special focus on avoiding creating nodes inside updateItem unless required
         sequencerGrid.setSelectionModel(null);
         sequencerGrid.setItems(steps);
         sequencerGrid.setCellFactory(stepListView -> new ListCell<>() {
@@ -206,7 +241,8 @@ public class HomeController implements Initializable, EventHandler<MouseEvent> {
             }
         });
 
-        for (int i = 1; i <= 10; i++) {
+        // Initialize 16 steps with empty cells (which will be set as and when user wishes)
+        for (int i = 1; i <= 16; i++) {
             Step step = new Step(i);
             for (int j = 1; j <= DEFAULT_NOTES.length; j++) {
                 InstrumentCellData instrumentCellData = new InstrumentCellData(j, i);
@@ -215,10 +251,10 @@ public class HomeController implements Initializable, EventHandler<MouseEvent> {
             steps.add(step);
         }
 
-        playheadOverlay.prefHeightProperty().bind(sequencerGrid.heightProperty());
-        playheadOverlay.setVisible(false);
+        // Initial timeline future initialization with default tempo
         createTimeline();
 
+        // After UI is rendered, find the horizontal scrollbar and virtual flow for playhead scrolling and visibility logic, then attach to playhead overlay height
         Platform.runLater(() -> {
             for (Node node : sequencerGrid.lookupAll(".scroll-bar")) {
                 if (node instanceof ScrollBar scrollBar && scrollBar.getOrientation() == Orientation.HORIZONTAL) {
@@ -231,6 +267,83 @@ public class HomeController implements Initializable, EventHandler<MouseEvent> {
                 double bottomPadding = hBar.isVisible() ? hBar.getHeight() + 1 : 0;
                 return new Insets(0, 0, bottomPadding, 0);
             }, hBar.visibleProperty(), hBar.heightProperty()));
+
+            playheadOverlay.maxHeightProperty().bind(Bindings.createDoubleBinding(() -> hBar.isVisible() ? virtualFlow.getHeight() - hBar.getHeight() : virtualFlow.getHeight(), virtualFlow.heightProperty(), hBar.visibleProperty(), hBar.heightProperty()));
+
+            // Force VirtualFlow layout refresh on window maximize (VirtualFlow doesn't auto-refresh on instant size changes)
+            Window window = sequencerGrid.getScene().getWindow();
+            if (window instanceof javafx.stage.Stage stage) {
+                stage.maximizedProperty().addListener((obs, wasMaximized, isMaximized) ->
+                        Platform.runLater(() -> virtualFlow.requestLayout()));
+            }
+        });
+
+        // Record mode setup (set key listeners to TabPane as it is an event accepting node, and we need to consume its own switching function)
+        recordStepLabel.managedProperty().bind(recordStepLabel.visibleProperty());
+        recordStepLabel.textProperty().bind(Bindings.createStringBinding(() -> "Step: " + ((recordColumn.get() % steps.size()) + 1), recordColumn));
+        recordModeInstrumentChoiceBoxStackPane.managedProperty().bind(recordModeInstrumentChoiceBoxStackPane.visibleProperty());
+        recordModeInstrumentChoiceBox.getItems().addFirst("Drum Kit");
+        recordModeInstrumentChoiceBox.getItems().addAll(1, Arrays.stream(orchestra).map(Instrument::getName).map(String::trim).toList());
+        recordModeInstrumentChoiceBox.getSelectionModel().selectFirst();
+        parentTabPane.addEventHandler(KeyEvent.KEY_PRESSED, event -> {
+            if (recordMode) {
+                if (event.getCode() == KeyCode.UP || event.getCode() == KeyCode.KP_UP) {
+                    recordModeInstrumentChoiceBox.getSelectionModel().selectPrevious();
+                    event.consume();
+                } else if (event.getCode() == KeyCode.DOWN || event.getCode() == KeyCode.KP_DOWN) {
+                    recordModeInstrumentChoiceBox.getSelectionModel().selectNext();
+                    event.consume();
+                } else {
+                    char c = event.getCode().getChar().charAt(0);
+                    if (event.isShiftDown() && Character.isDigit(c) && event.getCode() != KeyCode.DIGIT0 && event.getCode() != KeyCode.NUMPAD0) {
+                        int row = Integer.parseInt(String.valueOf(c)) - 1;
+                        if (row >= 0 && row < noteHeaderColumn.getChildren().size() - 1) {
+                            int col = recordColumn.get() % steps.size();
+                            InstrumentCellData cellData = steps.get(col).getCells().get(row);
+                            cellData.setInstrument(InstrumentCellData.INACTIVE, orchestra);
+                        }
+                        recordColumn.set(recordColumn.get() + 1);
+                        event.consume();
+                    }
+                }
+            }
+        });
+        parentTabPane.addEventHandler(KeyEvent.KEY_TYPED, event -> {
+            if (recordMode && event.getCharacter() != null && !event.getCharacter().isEmpty()) {
+                char c = event.getCharacter().charAt(0);
+                if (Character.isDigit(c) && c != '0') {
+                    int row = Integer.parseInt(String.valueOf(c)) - 1;
+                    if (row >= 0 && row < noteHeaderColumn.getChildren().size() - 1) {
+                        int col = recordColumn.get() % steps.size();
+                        int instr = recordModeInstrumentChoiceBox.getSelectionModel().getSelectedIndex();
+                        instr = instr == 0 ? InstrumentCellData.DRUM : instr - 1; // Map "Drum Kit" to DRUM constant, else actual instrument index
+                        InstrumentCellData cellData = steps.get(col).getCells().get(row);
+                        // If amongst the last few (upto 10) cells there be one whose duration would cover the step before current step (with same instrument),
+                        // add duration to that one instead of adding a new note
+                        int lastFewCellsToCheck = Math.min(10, steps.size() - 1);
+                        InstrumentCellData addDurationCell = null;
+                        for (int i = 0; i < lastFewCellsToCheck; i++) {
+                            int currentCheckColumn = (col - i + steps.size() - 1) % steps.size();
+                            InstrumentCellData currentCell = steps.get(currentCheckColumn).getCells().get(row);
+                            if (currentCell.getInstrument() != instr) continue;
+                            int currentCellDuration = currentCell.getDuration();
+                            int currentCellEndColumn = (currentCheckColumn + currentCellDuration - 1) % steps.size();
+                            if (currentCellEndColumn == (col - 1 + steps.size()) % steps.size()) {
+                                addDurationCell = currentCell;
+                                break;
+                            }
+                        }
+                        if (addDurationCell != null) {
+                            addDurationCell.setDuration(addDurationCell.getDuration() + 1, orchestra);
+                        } else {
+                            cellData.setInstrument(instr, orchestra);
+                        }
+                        recordColumn.set(recordColumn.get() + 1);
+                    }
+                } else if (Character.isSpaceChar(c)) {
+                    recordColumn.set(recordColumn.get() + 1);
+                }
+            }
         });
     }
 
@@ -247,7 +360,7 @@ public class HomeController implements Initializable, EventHandler<MouseEvent> {
     private void loopInstrumentsClicked() {
         new Thread(() -> {
             try {
-                Platform.runLater(() -> lockInstrumentAndControls(true));
+                Platform.runLater(() -> lockTesterInstrumentAndControls(true));
                 for (int i = 0; i < MAX_INSTRUMENTS; i++) {
                     final int x = i;
                     if (Integer.parseInt(note.getText()) >= 0 && Integer.parseInt(note.getText()) <= 127) {
@@ -262,7 +375,7 @@ public class HomeController implements Initializable, EventHandler<MouseEvent> {
             } catch (NumberFormatException | InterruptedException e) {
                 Platform.runLater(() -> new Alert(Alert.AlertType.ERROR, "Invalid input").showAndWait());
             } finally {
-                Platform.runLater(() -> lockInstrumentAndControls(false));
+                Platform.runLater(() -> lockTesterInstrumentAndControls(false));
             }
         }).start();
     }
@@ -271,7 +384,7 @@ public class HomeController implements Initializable, EventHandler<MouseEvent> {
     private void loopNotesClicked() {
         new Thread(() -> {
             try {
-                Platform.runLater(() -> lockNoteAndControls(true));
+                Platform.runLater(() -> lockTesterNoteAndControls(true));
                 for (int i = 0; i <= 127; i++) {
                     final int x = i;
                     if (Integer.parseInt(instrument.getText()) >= 0 && Integer.parseInt(instrument.getText()) <= 127) {
@@ -286,7 +399,7 @@ public class HomeController implements Initializable, EventHandler<MouseEvent> {
             } catch (NumberFormatException | InterruptedException e) {
                 Platform.runLater(() -> new Alert(Alert.AlertType.ERROR, "Invalid input").showAndWait());
             } finally {
-                Platform.runLater(() -> lockNoteAndControls(false));
+                Platform.runLater(() -> lockTesterNoteAndControls(false));
             }
         }).start();
     }
@@ -295,7 +408,7 @@ public class HomeController implements Initializable, EventHandler<MouseEvent> {
     private void loopAllClicked() {
         new Thread(() -> {
             try {
-                Platform.runLater(() -> lockAllAndControls(true));
+                Platform.runLater(() -> lockTesterInstrumentNoteAndControls(true));
                 for (int i = 0; i <= 127; i++) {
                     for (int j = 0; j < MAX_INSTRUMENTS; j++) {
                         final int x = i;
@@ -309,7 +422,7 @@ public class HomeController implements Initializable, EventHandler<MouseEvent> {
             } catch (NumberFormatException | InterruptedException e) {
                 Platform.runLater(() -> new Alert(Alert.AlertType.ERROR, "Invalid input").showAndWait());
             } finally {
-                Platform.runLater(() -> lockAllAndControls(false));
+                Platform.runLater(() -> lockTesterInstrumentNoteAndControls(false));
             }
         }).start();
     }
@@ -318,7 +431,7 @@ public class HomeController implements Initializable, EventHandler<MouseEvent> {
     private void loopRandomClicked() {
         new Thread(() -> {
             try {
-                Platform.runLater(() -> lockAllAndControls(true));
+                Platform.runLater(() -> lockTesterInstrumentNoteAndControls(true));
                 for (int i = 1; i <= 5; i++) {
                     final int x = (int) (Math.random() * 128);
                     final int y = (int) (Math.random() * MAX_INSTRUMENTS);
@@ -330,7 +443,7 @@ public class HomeController implements Initializable, EventHandler<MouseEvent> {
             } catch (NumberFormatException | InterruptedException e) {
                 Platform.runLater(() -> new Alert(Alert.AlertType.ERROR, "Invalid input").showAndWait());
             } finally {
-                Platform.runLater(() -> lockAllAndControls(false));
+                Platform.runLater(() -> lockTesterInstrumentNoteAndControls(false));
             }
         }).start();
     }
@@ -364,8 +477,9 @@ public class HomeController implements Initializable, EventHandler<MouseEvent> {
                 }
             }
         }
+        // To accommodate hack-inflate, we set it to 1 instead of 0 as 0 to 1 is last step
         playheadColumn.set(0);
-        if (isPaused) {
+        if (isPaused.get()) {
             stopPlayhead();
         }
     }
@@ -454,7 +568,19 @@ public class HomeController implements Initializable, EventHandler<MouseEvent> {
         }
     }
 
-    private void lockControls(boolean lock) {
+    @FXML
+    public void recordModeClicked() {
+        recordMode = !recordMode;
+        recordColumn.set(0);
+        recordModeButton.getGraphic().getStyleClass().set(1, recordMode ? "negative-toolbar-button" : "general-toolbar-button");
+        recordStepLabel.setVisible(recordMode);
+        recordModeInstrumentChoiceBoxStackPane.setVisible(recordMode);
+        lockComposerControlsExceptRecord(recordMode);
+        pauseCompositionClicked();
+        resetTimelineClicked();
+    }
+
+    private void lockTesterControls(boolean lock) {
         play.setDisable(lock);
         loopInstruments.setDisable(lock);
         loopNotes.setDisable(lock);
@@ -462,20 +588,34 @@ public class HomeController implements Initializable, EventHandler<MouseEvent> {
         loopRandom.setDisable(lock);
     }
 
-    private void lockInstrumentAndControls(boolean lock) {
+    private void lockTesterInstrumentAndControls(boolean lock) {
         instrument.setDisable(lock);
-        lockControls(lock);
+        lockTesterControls(lock);
     }
 
-    private void lockNoteAndControls(boolean lock) {
+    private void lockTesterNoteAndControls(boolean lock) {
         note.setDisable(lock);
-        lockControls(lock);
+        lockTesterControls(lock);
     }
 
-    private void lockAllAndControls(boolean lock) {
+    private void lockTesterInstrumentNoteAndControls(boolean lock) {
         instrument.setDisable(lock);
         note.setDisable(lock);
-        lockControls(lock);
+        lockTesterControls(lock);
+    }
+
+    private void lockComposerControlsExceptRecord(boolean lock) {
+        playCompositionButton.setDisable(lock);
+        pauseCompositionButton.setDisable(lock);
+        resetTimelineButton.setDisable(lock);
+        scrollToPlayheadButton.setDisable(lock);
+        changeTempoButton.setDisable(lock);
+        addStepButton.setDisable(lock);
+        removeStepButton.setDisable(lock);
+        addRowButton.setDisable(lock);
+        removeRowButton.setDisable(lock);
+        exportMidiButton.setDisable(lock);
+        importMidiButton.setDisable(lock);
     }
 
     private double getPlayheadX(double currentStepDouble, int stepIndex) {
@@ -505,7 +645,7 @@ public class HomeController implements Initializable, EventHandler<MouseEvent> {
         long playheadStartTime = System.nanoTime();
         if (playheadAnimator != null) {
             playheadAnimator.stop();
-            isPaused = true;
+            isPaused.set(true);
         }
         playheadAnimator = new javafx.animation.AnimationTimer() {
             private int lastCol = -1;
@@ -539,20 +679,20 @@ public class HomeController implements Initializable, EventHandler<MouseEvent> {
             }
         };
         playheadAnimator.start();
-        isPaused = false;
+        isPaused.set(false);
     }
 
     private void pausePlayhead() {
         if (playheadAnimator != null) {
             playheadAnimator.stop();
-            isPaused = true;
+            isPaused.set(true);
         }
     }
 
     private void resumePlayhead() {
         if (playheadAnimator != null) {
             playheadAnimator.start();
-            isPaused = false;
+            isPaused.set(false);
         }
     }
 
@@ -560,7 +700,7 @@ public class HomeController implements Initializable, EventHandler<MouseEvent> {
         if (playheadAnimator != null) {
             playheadAnimator.stop();
             playheadAnimator = null;
-            isPaused = true;
+            isPaused.set(true);
         }
         playheadOverlay.setVisible(false);
     }
@@ -572,7 +712,7 @@ public class HomeController implements Initializable, EventHandler<MouseEvent> {
             timelineFuture.cancel(false);
         }
         timelineFuture = scheduler.scheduleAtFixedRate(() -> {
-            if (isPaused) return;
+            if (isPaused.get()) return;
 
             int currentStep = playheadColumn.get() + 1;
 
@@ -617,88 +757,96 @@ public class HomeController implements Initializable, EventHandler<MouseEvent> {
     }
 
     @FXML
-    private void exportCompositionClicked() {
+    private void exportMidiClicked() {
         FileChooser fileChooser = new FileChooser();
-        fileChooser.setTitle("Export Composition");
-        fileChooser.getExtensionFilters().add(new FileChooser.ExtensionFilter("Composition Files (*.comp)", "*.comp"));
-        fileChooser.setInitialFileName("composition.comp");
+        fileChooser.setTitle("Export MIDI File");
+        fileChooser.getExtensionFilters().add(new FileChooser.ExtensionFilter("MIDI Files (*.mid)", "*.mid"));
+        fileChooser.setInitialFileName("composition.mid");
         File file = fileChooser.showSaveDialog(sequencerGrid.getScene().getWindow());
-        if (file != null) {
-            try {
-                List<Integer> notes = new ArrayList<>();
-                for (int r = 1; r < noteHeaderColumn.getChildren().size(); r++) {
-                    NoteHeaderCell cell = (NoteHeaderCell) noteHeaderColumn.getChildren().get(r);
-                    if (cell != null) notes.add(cell.getNote());
-                }
-                List<List<Integer>> grid = new ArrayList<>();
-                List<List<Integer>> durations = new ArrayList<>();
-                for (int r = 1; r < noteHeaderColumn.getChildren().size(); r++) {
-                    List<Integer> row = new ArrayList<>();
-                    List<Integer> durRow = new ArrayList<>();
-                    for (int c = 1; c <= steps.size(); c++) {
-                        InstrumentCellData cell = steps.get(c - 1).getCells().get(r - 1);
-                        row.add(cell != null ? cell.getInstrument() : InstrumentCellData.INACTIVE);
-                        durRow.add(cell != null ? cell.getDuration() : 1);
-                    }
-                    grid.add(row);
-                    durations.add(durRow);
-                }
-                Composition composition = new Composition(2, tempo, notes, steps.size(), grid, durations);
-                Gson gson = new GsonBuilder().setPrettyPrinting().create();
-                Files.writeString(file.toPath(), gson.toJson(composition));
-                new Alert(Alert.AlertType.INFORMATION, "Composition exported successfully!").showAndWait();
-            } catch (IOException e) {
-                new Alert(Alert.AlertType.ERROR, "Failed to export: " + e.getMessage()).showAndWait();
-            }
-        }
-    }
+        if (file == null) return;
 
-    @FXML
-    private void importCompositionClicked() {
-        FileChooser fileChooser = new FileChooser();
-        fileChooser.setTitle("Import Composition");
-        fileChooser.getExtensionFilters().add(new FileChooser.ExtensionFilter("Composition Files (*.comp)", "*.comp"));
-        File file = fileChooser.showOpenDialog(sequencerGrid.getScene().getWindow());
-        if (file != null) {
+        Dialog<Void> waitDialog = new Dialog<>();
+        waitDialog.setTitle("Exporting Composition");
+        waitDialog.setHeaderText("Processing MIDI data...");
+        ProgressIndicator progress = new ProgressIndicator();
+        progress.setProgress(-1);
+        StackPane progressPane = new StackPane();
+        progressPane.getChildren().add(progress);
+        StackPane.setAlignment(progress, Pos.CENTER);
+        waitDialog.getDialogPane().setContent(progressPane);
+        Window waitDialogWindow = waitDialog.getDialogPane().getScene().getWindow();
+        waitDialog.show();
+
+        Thread.startVirtualThread(() -> {
             try {
-                String content = Files.readString(file.toPath());
-                Gson gson = new Gson();
-                Composition composition = gson.fromJson(content, Composition.class);
-                if (composition.version() != 1 && composition.version() != 2) {
-                    new Alert(Alert.AlertType.ERROR, "Unsupported composition version: " + composition.version()).showAndWait();
+                int resolution = 480;
+                int ticksPerStep = resolution / 4;
+                Sequence sequence = new Sequence(Sequence.PPQ, resolution);
+                int microsecondsPerBeat = 60000000 / tempo;
+                byte[] tempoData = new byte[]{
+                        (byte) ((microsecondsPerBeat >> 16) & 0xFF),
+                        (byte) ((microsecondsPerBeat >> 8) & 0xFF),
+                        (byte) (microsecondsPerBeat & 0xFF)
+                };
+                Map<Integer, Track> instrumentTracks = new HashMap<>();
+                for (int r = 1; r < noteHeaderColumn.getChildren().size(); r++) {
+                    NoteHeaderCell noteHeaderCell = (NoteHeaderCell) noteHeaderColumn.getChildren().get(r);
+                    if (noteHeaderCell == null) continue;
+                    int noteValue = noteHeaderCell.getNote();
+                    for (int c = 0; c < steps.size(); c++) {
+                        InstrumentCellData cell = steps.get(c).getCells().get(r - 1);
+                        if (cell == null || cell.getInstrument() == InstrumentCellData.INACTIVE) continue;
+                        int instr = cell.getInstrument();
+                        int dur = cell.getDuration();
+                        boolean isDrum = (instr == InstrumentCellData.DRUM);
+                        int channel = isDrum ? 9 : (instr % 16 == 9 ? 10 : instr % 16);
+                        int program = isDrum ? 0 : instr;
+                        Track track = instrumentTracks.computeIfAbsent(instr, k -> {
+                            Track t = sequence.createTrack();
+                            try {
+                                if (instrumentTracks.isEmpty()) {
+                                    MetaMessage tempoMessage = new MetaMessage();
+                                    tempoMessage.setMessage(0x51, tempoData, 3);
+                                    t.add(new MidiEvent(tempoMessage, 0));
+                                }
+                                if (!isDrum) {
+                                    ShortMessage programChange = new ShortMessage();
+                                    programChange.setMessage(ShortMessage.PROGRAM_CHANGE, channel, program, 0);
+                                    t.add(new MidiEvent(programChange, 0));
+                                }
+                            } catch (Exception ignored) {
+                            }
+                            return t;
+                        });
+                        long startTick = (long) c * ticksPerStep;
+                        long endTick = startTick + (long) dur * ticksPerStep;
+                        ShortMessage noteOn = new ShortMessage();
+                        noteOn.setMessage(ShortMessage.NOTE_ON, channel, noteValue, 100);
+                        track.add(new MidiEvent(noteOn, startTick));
+                        ShortMessage noteOff = new ShortMessage();
+                        noteOff.setMessage(ShortMessage.NOTE_OFF, channel, noteValue, 0);
+                        track.add(new MidiEvent(noteOff, endTick));
+                    }
+                }
+                if (instrumentTracks.isEmpty()) {
+                    Platform.runLater(() -> {
+                        waitDialogWindow.hide();
+                        new Alert(Alert.AlertType.WARNING, "No notes to export").showAndWait();
+                    });
                     return;
                 }
-                clearGrid();
-                tempo = composition.tempo();
-                for (int i = 0; i < composition.notes().size(); i++) {
-                    int noteValue = composition.notes().get(i);
-                    NoteHeaderCell noteHeaderCell = new NoteHeaderCell(this, noteValue, i + 1, 0);
-                    noteHeaderColumn.getChildren().add(i + 1, noteHeaderCell);
-                }
-                for (int c = 1; c <= composition.steps(); c++) {
-                    Step step = new Step(c);
-                    steps.add(step);
-                }
-                boolean hasDurations = composition.version() == 2 && composition.durations() != null;
-                for (int r = 0; r < composition.grid().size(); r++) {
-                    List<Integer> row = composition.grid().get(r);
-                    List<Integer> durRow = hasDurations ? composition.durations().get(r) : null;
-                    for (int c = 0; c < row.size(); c++) {
-                        int instr = row.get(c);
-                        int dur = (durRow != null && c < durRow.size()) ? durRow.get(c) : 1;
-                        InstrumentCellData instrumentCellData = new InstrumentCellData(r + 1, c + 1);
-                        if (instr != InstrumentCellData.INACTIVE) {
-                            instrumentCellData.setInstrumentAndDuration(instr, dur, orchestra);
-                        }
-                        steps.get(c).getCells().add(instrumentCellData);
-                    }
-                }
-                createTimeline();
-                new Alert(Alert.AlertType.INFORMATION, "Composition imported successfully!").showAndWait();
+                MidiSystem.write(sequence, 1, file);
+                Platform.runLater(() -> Platform.runLater(() -> {
+                    waitDialogWindow.hide();
+                    new Alert(Alert.AlertType.INFORMATION, "MIDI exported successfully!").showAndWait();
+                }));
             } catch (Exception e) {
-                new Alert(Alert.AlertType.ERROR, "Failed to import: " + e.getMessage()).showAndWait();
+                Platform.runLater(() -> {
+                    waitDialogWindow.hide();
+                    new Alert(Alert.AlertType.ERROR, "Failed to export MIDI: " + e.getMessage()).showAndWait();
+                });
             }
-        }
+        });
     }
 
     @FXML

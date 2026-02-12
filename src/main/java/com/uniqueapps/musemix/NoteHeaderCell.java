@@ -3,6 +3,7 @@ package com.uniqueapps.musemix;
 import javafx.css.PseudoClass;
 import javafx.event.EventHandler;
 import javafx.scene.control.Label;
+import javafx.scene.effect.Bloom;
 import javafx.scene.input.MouseEvent;
 import javafx.scene.layout.HBox;
 import javafx.scene.layout.Priority;
@@ -107,6 +108,7 @@ public class NoteHeaderCell extends Label {
     private final int row;
     private final int column;
     private static final PseudoClass HIGHLIGHT = PseudoClass.getPseudoClass("highlighted");
+    private static final Bloom bloom = new Bloom(0.6);
 
     public NoteHeaderCell(EventHandler<MouseEvent> mouseHandler, int note, int row, int column) {
         super();
@@ -140,10 +142,12 @@ public class NoteHeaderCell extends Label {
     }
 
     public void highlightOn() {
+        setEffect(bloom);
         pseudoClassStateChanged(HIGHLIGHT, true);
     }
 
     public void highlightOff() {
+        setEffect(null);
         pseudoClassStateChanged(HIGHLIGHT, false);
     }
 }

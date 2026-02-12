@@ -3,8 +3,9 @@
 <?import javafx.geometry.*?>
 <?import javafx.scene.control.*?>
 <?import javafx.scene.layout.*?>
+<?import org.kordamp.ikonli.javafx.FontIcon?>
 
-<TabPane maxHeight="-Infinity" maxWidth="-Infinity" minHeight="-Infinity" minWidth="-Infinity" prefHeight="600.0" prefWidth="800.0" tabClosingPolicy="UNAVAILABLE" xmlns="http://javafx.com/javafx/17.0.12" xmlns:fx="http://javafx.com/fxml/1" fx:controller="com.uniqueapps.musemix.HomeController">
+<TabPane fx:id="parentTabPane" maxHeight="-Infinity" maxWidth="-Infinity" minHeight="-Infinity" minWidth="-Infinity" prefHeight="600.0" prefWidth="800.0" tabClosingPolicy="UNAVAILABLE" xmlns="http://javafx.com/javafx/17.0.12" xmlns:fx="http://javafx.com/fxml/1" fx:controller="com.uniqueapps.musemix.HomeController">
     <Tab text="Tester">
         <VBox>
             <GridPane hgap="8.0" vgap="8.0">
@@ -65,27 +66,109 @@
     <Tab text="Composer">
         <VBox>
             <ToolBar>
-                <Button mnemonicParsing="false" onAction="#playCompositionClicked" text="Play" />
-                <Button mnemonicParsing="false" onAction="#pauseCompositionClicked" text="Pause" />
-                <Button mnemonicParsing="false" onAction="#resetTimelineClicked" text="Reset Timeline" />
-                <Button fx:id="scrollToPlayheadButton" mnemonicParsing="false" onAction="#scrollToPlayheadClicked" text="Enable Scroll to Playhead" />
+                <Button fx:id="playCompositionButton" mnemonicParsing="false" onAction="#playCompositionClicked" focusTraversable="false">
+                    <graphic>
+                        <FontIcon iconLiteral="fas-play" iconSize="16" styleClass="positive-toolbar-button" />
+                    </graphic>
+                    <tooltip>
+                        <Tooltip text="Play" />
+                    </tooltip>
+                </Button>
+                <Button fx:id="pauseCompositionButton" mnemonicParsing="false" onAction="#pauseCompositionClicked" focusTraversable="false">
+                    <graphic>
+                        <FontIcon iconLiteral="fas-pause" iconSize="16" styleClass="medium-toolbar-button" />
+                    </graphic>
+                    <tooltip>
+                        <Tooltip text="Pause" />
+                    </tooltip>
+                </Button>
+                <Button fx:id="resetTimelineButton" mnemonicParsing="false" onAction="#resetTimelineClicked" focusTraversable="false">
+                    <graphic>
+                        <FontIcon iconLiteral="fas-stop" iconSize="16" styleClass="negative-toolbar-button" />
+                    </graphic>
+                    <tooltip>
+                        <Tooltip text="Reset" />
+                    </tooltip>
+                </Button>
+                <Button fx:id="scrollToPlayheadButton" mnemonicParsing="false" onAction="#scrollToPlayheadClicked" focusTraversable="false">
+                    <graphic>
+                        <FontIcon iconLiteral="fas-running" iconSize="16" styleClass="general-toolbar-button" />
+                    </graphic>
+                    <tooltip>
+                        <Tooltip text="Scroll to Playhead" />
+                    </tooltip>
+                </Button>
+                <Button fx:id="changeTempoButton" mnemonicParsing="false" onAction="#changeTempoClicked" focusTraversable="false">
+                    <graphic>
+                        <FontIcon iconLiteral="fas-stopwatch" iconSize="16" styleClass="general-toolbar-button" />
+                    </graphic>
+                    <tooltip>
+                        <Tooltip text="Change Tempo" />
+                    </tooltip>
+                </Button>
+                <Button fx:id="addStepButton" mnemonicParsing="false" onAction="#addStepClicked" text="Step" focusTraversable="false">
+                    <graphic>
+                        <FontIcon iconLiteral="fas-plus" iconSize="16" styleClass="general-toolbar-button" />
+                    </graphic>
+                </Button>
+                <Button fx:id="removeStepButton" mnemonicParsing="false" onAction="#removeStepClicked" text="Step" focusTraversable="false">
+                    <graphic>
+                        <FontIcon iconLiteral="fas-minus" iconSize="16" styleClass="general-toolbar-button" />
+                    </graphic>
+                </Button>
+                <Button fx:id="addRowButton" mnemonicParsing="false" onAction="#addRowClicked" text="Row" focusTraversable="false">
+                    <graphic>
+                        <FontIcon iconLiteral="fas-plus" iconSize="16" styleClass="general-toolbar-button" />
+                    </graphic>
+                </Button>
+                <Button fx:id="removeRowButton" mnemonicParsing="false" onAction="#removeRowClicked" text="Row" focusTraversable="false">
+                    <graphic>
+                        <FontIcon iconLiteral="fas-minus" iconSize="16" styleClass="general-toolbar-button" />
+                    </graphic>
+                </Button>
+                <Button fx:id="recordModeButton" mnemonicParsing="false" onAction="#recordModeClicked" text="Record" focusTraversable="false">
+                    <graphic>
+                        <FontIcon iconLiteral="fas-keyboard" iconSize="16" styleClass="general-toolbar-button" />
+                    </graphic>
+                    <tooltip>
+                        <Tooltip text="Record Mode" />
+                    </tooltip>
+                </Button>
+                <Label fx:id="recordStepLabel" text="Step: 1" visible="false">
+                    <padding>
+                        <Insets left="4.0" right="4.0" />
+                    </padding>
+                </Label>
+                <StackPane fx:id="recordModeInstrumentChoiceBoxStackPane" visible="false">
+                    <ChoiceBox fx:id="recordModeInstrumentChoiceBox" prefWidth="150.0" focusTraversable="false" />
+                    <padding>
+                        <Insets left="4.0" right="4.0" />
+                    </padding>
+                </StackPane>
                 <Separator orientation="VERTICAL" />
-                <Button mnemonicParsing="false" onAction="#changeTempoClicked" text="Change Tempo" />
-                <Button mnemonicParsing="false" onAction="#addStepClicked" text="Add Step" />
-                <Button mnemonicParsing="false" onAction="#removeStepClicked" text="Remove Step" />
-                <Button mnemonicParsing="false" onAction="#addRowClicked" text="Add Row" />
-                <Button mnemonicParsing="false" onAction="#removeRowClicked" text="Remove Row" />
-                <Separator orientation="VERTICAL" />
-                <Button mnemonicParsing="false" onAction="#exportCompositionClicked" text="Export" />
-                <Button mnemonicParsing="false" onAction="#importCompositionClicked" text="Import" />
-                <Button mnemonicParsing="false" onAction="#importMidiClicked" text="Import MIDI" />
+                <Button fx:id="exportMidiButton" mnemonicParsing="false" onAction="#exportMidiClicked" focusTraversable="false">
+                    <graphic>
+                        <FontIcon iconLiteral="fas-file-export" iconSize="16" styleClass="general-toolbar-button" />
+                    </graphic>
+                    <tooltip>
+                        <Tooltip text="Export MIDI" />
+                    </tooltip>
+                </Button>
+                <Button fx:id="importMidiButton" mnemonicParsing="false" onAction="#importMidiClicked" focusTraversable="false">
+                    <graphic>
+                        <FontIcon iconLiteral="fas-file-import" iconSize="16" styleClass="general-toolbar-button" />
+                    </graphic>
+                    <tooltip>
+                        <Tooltip text="Import MIDI" />
+                    </tooltip>
+                </Button>
             </ToolBar>
             <ScrollPane fitToHeight="true" fitToWidth="true" VBox.vgrow="ALWAYS" hbarPolicy="NEVER">
                 <HBox VBox.vgrow="ALWAYS">
                     <VBox VBox.vgrow="ALWAYS" fx:id="noteHeaderColumn" prefWidth="120" style="-fx-border-color: gray; -fx-border-width: 1px;" />
                     <StackPane VBox.vgrow="ALWAYS" HBox.hgrow="ALWAYS" maxWidth="Infinity" alignment="TOP_LEFT">
                         <ListView fx:id="sequencerGrid" orientation="HORIZONTAL" cache="true" cacheHint="SPEED" focusTraversable="false" HBox.hgrow="ALWAYS" maxWidth="Infinity" />
-                        <Region fx:id="playheadOverlay" maxHeight="Infinity" maxWidth="3" minHeight="0" minWidth="3" mouseTransparent="true" prefWidth="3" style="-fx-background-color: red;" />
+                        <Region fx:id="playheadOverlay" maxHeight="0" maxWidth="3" minHeight="0" minWidth="3" mouseTransparent="true" prefWidth="3" style="-fx-background-color: red;" visible="false" />
                     </StackPane>
                 </HBox>
             </ScrollPane>

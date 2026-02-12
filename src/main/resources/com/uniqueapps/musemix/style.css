@@ -1,3 +1,8 @@
+.root {
+    -fx-font-family: "Inter SemiBold";
+    -fx-font-size: 14px;
+}
+
 .note-header-cell {
     -fx-text-fill: white;
     -fx-padding: 3px;
@@ -8,4 +13,20 @@
 
 .note-header-cell:highlighted {
     -fx-background-color: rgba(31,111,235,1.0);
+}
+
+.general-toolbar-button {
+    -color-fg-default: "#2196F3";
+}
+
+.positive-toolbar-button {
+    -color-fg-default: "#4CAF50";
+}
+
+.medium-toolbar-button {
+    -color-fg-default: "#FF9800";
+}
+
+.negative-toolbar-button {
+    -color-fg-default: "#F44336";
 }

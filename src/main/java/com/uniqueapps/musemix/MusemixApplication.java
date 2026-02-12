@@ -1,10 +1,11 @@
 package com.uniqueapps.musemix;
 
-import atlantafx.base.theme.PrimerDark;
+import atlantafx.base.theme.*;
 import javafx.application.Application;
 import javafx.fxml.FXMLLoader;
 import javafx.scene.Scene;
 import javafx.scene.image.Image;
+import javafx.scene.text.Font;
 import javafx.stage.Stage;
 
 import java.io.IOException;
@@ -16,6 +17,7 @@ public class MusemixApplication extends Application {
 
     @Override
     public void start(Stage stage) throws IOException {
+        Font.loadFont(Objects.requireNonNull(MusemixApplication.class.getResource("Inter-SemiBold.ttf")).toExternalForm().replace("%20", " "), 14);
         Application.setUserAgentStylesheet(new PrimerDark().getUserAgentStylesheet());
         FXMLLoader loader = new FXMLLoader(Objects.requireNonNull(MusemixApplication.class.getResource("home.fxml")));
         Scene scene = new Scene(loader.load(), 800, 600);

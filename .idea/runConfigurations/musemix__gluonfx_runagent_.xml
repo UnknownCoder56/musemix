@@ -1,22 +1,8 @@
 <component name="ProjectRunConfigurationManager">
-  <configuration default="false" name="musemixe [clean,javafx:run]" type="MavenRunConfiguration" factoryName="Maven">
+  <configuration default="false" name="musemix [gluonfx:runagent]" type="MavenRunConfiguration" factoryName="Maven">
     <MavenSettings>
       <option name="myGeneralSettings" />
-      <option name="myRunnerSettings">
-        <MavenRunnerSettings>
-          <option name="delegateBuildToMaven" value="false" />
-          <option name="environmentProperties">
-            <map />
-          </option>
-          <option name="jreName" value="#USE_PROJECT_JDK" />
-          <option name="mavenProperties">
-            <map />
-          </option>
-          <option name="passParentEnv" value="true" />
-          <option name="skipTests" value="false" />
-          <option name="vmOptions" value="-Xmx2048m" />
-        </MavenRunnerSettings>
-      </option>
+      <option name="myRunnerSettings" />
       <option name="myRunnerParameters">
         <MavenRunnerParameters>
           <option name="cmdOptions" />
@@ -25,8 +11,7 @@
           </option>
           <option name="goals">
             <list>
-              <option value="clean" />
-              <option value="javafx:run" />
+              <option value="gluonfx:runagent" />
             </list>
           </option>
           <option name="multimoduleDir" />
