@@ -467,19 +467,8 @@ public class HomeController implements Initializable, EventHandler<MouseEvent> {
 
     @FXML
     private void resetTimelineClicked() {
-        for (int i = 1; i < noteHeaderColumn.getChildren().size(); i++) {
-            NoteHeaderCell noteHeaderCell = (NoteHeaderCell) noteHeaderColumn.getChildren().get(i);
-            if (noteHeaderCell == null) continue;
-            for (Step step : steps) {
-                InstrumentCellData cell = step.getCells().get(i - 1);
-                if (cell != null) {
-                    int instr = cell.getInstrument();
-                    if (instr != InstrumentCellData.INACTIVE) {
-                        Player.playNoteOff(instr, noteHeaderCell.getNote());
-                    }
-                }
-            }
-        }
+        // Instead of checking grid and turning notes off (also potentially missing past removed notes), we turn off all channels through Player
+        Player.playAllOff();
         // We set it to 0, when timelineFuture starts it will set to 1 for the first step
         playheadStep.set(0);
         if (isPaused.get()) {
@@ -1017,11 +1006,12 @@ public class HomeController implements Initializable, EventHandler<MouseEvent> {
         noteHeaderColumn.getChildren().removeIf(node -> node instanceof NoteHeaderCell);
     }
 
-    public void shutdownScheduler() {
+    public void shutdown() {
         if (timelineFuture != null && !timelineFuture.isDone()) {
             timelineFuture.cancel(false);
         }
         scheduler.shutdown();
+        Player.shutdownSynthesizer();
     }
 
     @Override

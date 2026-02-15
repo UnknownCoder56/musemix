@@ -1,20 +1,28 @@
 package com.uniqueapps.musemix;
 
-import javafx.css.PseudoClass;
 import javafx.event.EventHandler;
+import javafx.geometry.Insets;
 import javafx.scene.control.Label;
 import javafx.scene.effect.Bloom;
 import javafx.scene.input.MouseEvent;
-import javafx.scene.layout.HBox;
-import javafx.scene.layout.Priority;
-import javafx.scene.layout.VBox;
+import javafx.scene.layout.*;
+import javafx.scene.paint.Color;
 
 import java.util.LinkedHashMap;
 
 public class NoteHeaderCell extends Label {
 
     public static final LinkedHashMap<Integer, String> NOTE_MAP = new LinkedHashMap<>();
+    private static final LinkedHashMap<Integer, Background> NOTE_BACKGROUND_MAP = new LinkedHashMap<>();
+    private static final Background DEFAULT_BACKGROUND = new Background(new BackgroundFill(Color.rgb(255, 255, 255, 0.2), null, null));
+    private static final Bloom BLOOM = new Bloom(0.6);
+
+    private int note;
+    private final int row;
+    private final int column;
+
     static {
+        // MIDI note (alongside Drum channel note) numbers and their corresponding note names
         NOTE_MAP.put(21, "A0");
         NOTE_MAP.put(22, "A#0");
         NOTE_MAP.put(23, "B0");
@@ -29,7 +37,7 @@ public class NoteHeaderCell extends Label {
         NOTE_MAP.put(32, "G#1");
         NOTE_MAP.put(33, "A1");
         NOTE_MAP.put(34, "A#1");
-        NOTE_MAP.put(35, "B1 / Bass Drum 2");
+        NOTE_MAP.put(35, "B1 / Acoustic Bass Drum");
         NOTE_MAP.put(36, "C2 / Bass Drum 1");
         NOTE_MAP.put(37, "C#2 / Side Stick");
         NOTE_MAP.put(38, "D2 / Acoustic Snare");
@@ -103,17 +111,24 @@ public class NoteHeaderCell extends Label {
         NOTE_MAP.put(106, "A#7");
         NOTE_MAP.put(107, "B7");
         NOTE_MAP.put(108, "C8");
+
+        // VIBGYOR background fills
+        NOTE_BACKGROUND_MAP.put(0, new Background(new BackgroundFill(Color.web("#F44336"), null, null))); // RED
+        NOTE_BACKGROUND_MAP.put(1, new Background(new BackgroundFill(Color.web("#FF5722"), null, null))); // ORANGE
+        NOTE_BACKGROUND_MAP.put(2, new Background(new BackgroundFill(Color.web("#FF9800"), null, null))); // YELLOW
+        NOTE_BACKGROUND_MAP.put(3, new Background(new BackgroundFill(Color.web("#4CAF50"), null, null))); // GREEN
+        NOTE_BACKGROUND_MAP.put(4, new Background(new BackgroundFill(Color.web("#2196F3"), null, null))); // BLUE
+        NOTE_BACKGROUND_MAP.put(5, new Background(new BackgroundFill(Color.web("#3F51B5"), null, null))); // INDIGO
+        NOTE_BACKGROUND_MAP.put(6, new Background(new BackgroundFill(Color.web("#673AB7"), null, null))); // VIOLET
     }
-    private int note;
-    private final int row;
-    private final int column;
-    private static final PseudoClass HIGHLIGHT = PseudoClass.getPseudoClass("highlighted");
-    private static final Bloom bloom = new Bloom(0.6);
 
     public NoteHeaderCell(EventHandler<MouseEvent> mouseHandler, int note, int row, int column) {
         super();
+        setTextFill(Color.WHITE);
+        setPadding(new Insets(3));
         setText(NOTE_MAP.get(note));
-        getStyleClass().add("note-header-cell");
+        setBorder(new Border(new BorderStroke(Color.GRAY, BorderStrokeStyle.SOLID, null, new BorderWidths(1))));
+        setBackground(DEFAULT_BACKGROUND);
         setMaxSize(Double.MAX_VALUE, Double.MAX_VALUE);
         setMinHeight(40);
         VBox.setVgrow(this, Priority.ALWAYS);
@@ -143,12 +158,12 @@ public class NoteHeaderCell extends Label {
     }
 
     public void highlightOn() {
-        setEffect(bloom);
-        pseudoClassStateChanged(HIGHLIGHT, true);
+        setEffect(BLOOM);
+        setBackground(NOTE_BACKGROUND_MAP.get((note - 21) % 7));
     }
 
     public void highlightOff() {
         setEffect(null);
-        pseudoClassStateChanged(HIGHLIGHT, false);
+        setBackground(DEFAULT_BACKGROUND);
     }
 }

@@ -32,7 +32,7 @@ public class MusemixApplication extends Application {
     @Override
     public void stop() {
         if (homeController != null) {
-            homeController.shutdownScheduler();
+            homeController.shutdown();
         }
     }
 

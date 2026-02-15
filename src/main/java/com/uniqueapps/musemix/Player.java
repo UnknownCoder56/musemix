@@ -8,20 +8,22 @@ import java.util.Map;
 
 public class Player implements Runnable {
 
-    private final int instrument;
-    private final int note;
-    private final double durationSeconds;
+    private static final int DRUM_CHANNEL = 9;
+    private static Synthesizer synthesizer;
     private static MidiChannel[] channels;
     private static Instrument[] orchestra;
     private static final Object channelLock = new Object();
     private static int nextChannel = 0;
     private static final int[] channelProgram = new int[16];
-    private static final int DRUM_CHANNEL = 9;
     private static final Map<Integer, Integer> activeNotes = new HashMap<>();
+
+    private final int instrument;
+    private final int note;
+    private final double durationSeconds;
 
     static {
         try {
-            Synthesizer synthesizer = MidiSystem.getSynthesizer();
+            synthesizer = MidiSystem.getSynthesizer();
             synthesizer.open();
             channels = synthesizer.getChannels();
             orchestra = synthesizer.getLoadedInstruments();
@@ -102,5 +104,16 @@ public class Player implements Runnable {
             Integer channelIndex = activeNotes.remove(key);
             if (channelIndex != null) channels[channelIndex].noteOff(note);
         }
+    }
+
+    public static void playAllOff() {
+        synchronized (channelLock) {
+            for (Integer channelIndex : activeNotes.values()) channels[channelIndex].allNotesOff();
+            activeNotes.clear();
+        }
+    }
+
+    public static void shutdownSynthesizer() {
+        if (synthesizer != null && synthesizer.isOpen()) synthesizer.close();
     }
 }

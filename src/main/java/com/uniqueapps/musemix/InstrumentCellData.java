@@ -9,6 +9,7 @@ public class InstrumentCellData {
 
     public static final int INACTIVE = -1;
     public static final int DRUM = 1000;
+
     private int instrument = INACTIVE;
     private int duration = 1;
     private final int row;
