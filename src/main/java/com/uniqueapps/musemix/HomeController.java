@@ -124,7 +124,9 @@ public class HomeController implements Initializable, EventHandler<MouseEvent> {
     });
     private ScheduledFuture<?> timelineFuture;
     private final AtomicBoolean isPaused = new AtomicBoolean(true);
-    private final AtomicInteger playheadColumn = new AtomicInteger(0);
+    // 0 - timelineFuture not started yet, playheadAnimator waiting
+    // 1 onward - timelineFuture starts and sets 1, playheadAnimator begins
+    private final AtomicInteger playheadStep = new AtomicInteger(0);
     private int tempo = 60;
     private boolean recordMode = false;
 
@@ -478,8 +480,8 @@ public class HomeController implements Initializable, EventHandler<MouseEvent> {
                 }
             }
         }
-        // To accommodate hack-inflate, we set it to 1 instead of 0 as 0 to 1 is last step
-        playheadColumn.set(0);
+        // We set it to 0, when timelineFuture starts it will set to 1 for the first step
+        playheadStep.set(0);
         if (isPaused.get()) {
             stopPlayhead();
         }
@@ -623,21 +625,15 @@ public class HomeController implements Initializable, EventHandler<MouseEvent> {
         if (virtualFlow == null) return -1;
         Step firstVisibleStep = virtualFlow.getFirstVisibleCell().getItem();
         Step lastVisibleStep = virtualFlow.getLastVisibleCell().getItem();
-        // Let "0 to 1 index" or 1 to 2 step be the last step (according to currentStepDouble hack-inflate logic)
-        if (stepIndex == 0) stepIndex = steps.size();
-        // This logic stays at-par, had -1 for visibleStep index before to match 0-based LHS, now 1-based both sides
+        // stepIndex is now 1-based (1 to steps.size())
         if (stepIndex < firstVisibleStep.getIndex() || stepIndex > lastVisibleStep.getIndex()) {
             return -1;
         }
         if (scrollToPlayhead && hBar.getValue() != 1.0 && hBar.isVisible()) {
             return 0;
         }
-        // According to hack-inflate, when step 1 to 2, instead treat as last step traversal, so add steps.size()
-        if (currentStepDouble < 2) {
-            return (steps.size() + (currentStepDouble - 1 - 1) - (firstVisibleStep.getIndex() - 1)) * STEP_WIDTH;
-        }
-        // According to hack-inflate, for all rest, first -1 is to come to 0 based index, second -1 is to align to actual playback
-        return ((currentStepDouble - 1 - 1) - (firstVisibleStep.getIndex() - 1)) * STEP_WIDTH;
+        // currentStepDouble is 1-based, subtract 1 to get 0-based position for pixel calculation
+        return ((currentStepDouble - 1) - (firstVisibleStep.getIndex() - 1)) * STEP_WIDTH;
     }
 
     private void startPlayhead() {
@@ -655,27 +651,35 @@ public class HomeController implements Initializable, EventHandler<MouseEvent> {
             @Override
             public void handle(long now) {
                 double currentStepDouble;
-                int col = playheadColumn.get();
+                int col = playheadStep.get();
+                // Wait (also hide playhead and reset scrolling) till timelineFuture starts and sets 1 for the first time
+                if (col == 0) {
+                    playheadOverlay.setVisible(false);
+                    playheadOverlay.setTranslateX(0);
+                    if (scrollToPlayhead) {
+                        hBar.setValue(0);
+                    }
+                    return;
+                }
+
+                // Normal run logic
                 if (col != lastCol) {
                     stepStartTime = now;
                     lastCol = col;
                 }
                 long elapsed = now - stepStartTime;
                 double fraction = Math.min(elapsed / stepDurationNanos, 1.0);
-                currentStepDouble = col + 1 + fraction;
-                if (currentStepDouble > steps.size() + 1) currentStepDouble -= steps.size();
+                currentStepDouble = col + fraction;
+                // Even though playback goes till steps size, playhead animator has to go fractionally above it till last step completion
+                // And rather than resetting local currentStepDouble, we just wait till main playheadStep gets updated by timelineFuture
+                if (currentStepDouble > steps.size() + 1) return;
                 double toSetX = getPlayheadX(currentStepDouble, col);
                 playheadOverlay.setVisible(toSetX != -1);
                 playheadOverlay.setTranslateX(toSetX);
                 if (scrollToPlayhead) {
                     if (hBar == null) return;
-                    // According to hack-inflate, when step 1 to 2, instead treat as last step traversal, so add steps.size()
-                    if (currentStepDouble < 2) {
-                        hBar.setValue(Math.clamp(((steps.size() + (currentStepDouble - 1 - 1)) * STEP_WIDTH) / (steps.size() * STEP_WIDTH - sequencerGrid.getWidth()), 0.0, 1.0));
-                        return;
-                    }
-                    // According to hack-inflate, for all rest, first -1 is to come to 0 based index, second -1 is to align to actual playback
-                    hBar.setValue(Math.clamp(((currentStepDouble - 1 - 1) * STEP_WIDTH) / (steps.size() * STEP_WIDTH - sequencerGrid.getWidth()), 0.0, 1.0));
+                    // currentStepDouble is now 1-based, so subtract 1 to get 0-based position for scroll calculation
+                    hBar.setValue(Math.clamp(((currentStepDouble - 1) * STEP_WIDTH) / (steps.size() * STEP_WIDTH - sequencerGrid.getWidth()), 0.0, 1.0));
                 }
             }
         };
@@ -715,7 +719,16 @@ public class HomeController implements Initializable, EventHandler<MouseEvent> {
         timelineFuture = scheduler.scheduleAtFixedRate(() -> {
             if (isPaused.get()) return;
 
-            int currentStep = playheadColumn.get() + 1;
+            // P.S. - This approach (and waiting of playheadAnimator) was needed because it is found that timelineFuture starts with a significant delay
+            // P.S. - The 1-based playheadStep also helps with proper pixel calculation for scrolling and playhead, while keeping 0 free for waiting stage
+            // When timelineFuture starts, it sets playheadStep to 1 for the first step, and then playheadAnimator starts
+            // For subsequent steps, playheadStep remains as it is for the entire step duration due to set-and-use logic
+            playheadStep.set(playheadStep.get() + 1);
+            if (playheadStep.get() > steps.size()) {
+                playheadStep.set(1);
+            }
+
+            int currentStep = playheadStep.get();
 
             for (int i = 1; i < noteHeaderColumn.getChildren().size(); i++) {
                 NoteHeaderCell noteHeaderCell = (NoteHeaderCell) noteHeaderColumn.getChildren().get(i);
@@ -747,11 +760,6 @@ public class HomeController implements Initializable, EventHandler<MouseEvent> {
                         Platform.runLater(noteHeaderCell::highlightOn);
                     }
                 }
-            }
-
-            playheadColumn.set(playheadColumn.get() + 1);
-            if (playheadColumn.get() >= steps.size()) {
-                playheadColumn.set(0);
             }
         }, 0, periodNanos, TimeUnit.NANOSECONDS);
         resetTimelineClicked();
