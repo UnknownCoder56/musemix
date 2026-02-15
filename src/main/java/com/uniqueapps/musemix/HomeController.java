@@ -231,6 +231,7 @@ public class HomeController implements Initializable, EventHandler<MouseEvent> {
                 Label cellLabel = new Label();
                 cellLabel.setStyle("-fx-text-fill: white; -fx-padding: 3px; -fx-border-color: gray; -fx-border-width: 1px;");
                 cellLabel.setMaxSize(Double.MAX_VALUE, Double.MAX_VALUE);
+                cellLabel.setMinHeight(40);
                 VBox.setVgrow(cellLabel, Priority.ALWAYS);
                 HBox.setHgrow(cellLabel, Priority.ALWAYS);
                 cellLabel.setFont(Font.font(cellLabel.getFont().getFamily(), FontWeight.BOLD, cellLabel.getFont().getSize() + 2));
@@ -487,7 +488,7 @@ public class HomeController implements Initializable, EventHandler<MouseEvent> {
     @FXML
     private void scrollToPlayheadClicked() {
         scrollToPlayhead = !scrollToPlayhead;
-        scrollToPlayheadButton.setText(scrollToPlayhead ? "Disable Scroll to Playhead" : "Enable Scroll to Playhead");
+        scrollToPlayheadButton.getGraphic().getStyleClass().set(1, scrollToPlayhead ? "negative-toolbar-button" : "general-toolbar-button");
     }
 
     @FXML

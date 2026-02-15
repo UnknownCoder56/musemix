@@ -115,6 +115,7 @@ public class NoteHeaderCell extends Label {
         setText(NOTE_MAP.get(note));
         getStyleClass().add("note-header-cell");
         setMaxSize(Double.MAX_VALUE, Double.MAX_VALUE);
+        setMinHeight(40);
         VBox.setVgrow(this, Priority.ALWAYS);
         HBox.setHgrow(this, Priority.ALWAYS);
         setOnMouseClicked(mouseHandler);
