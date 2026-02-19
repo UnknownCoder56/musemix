@@ -143,6 +143,9 @@ public class HomeController implements Initializable, EventHandler<MouseEvent> {
     @FXML
     @Override
     public void initialize(URL url, ResourceBundle resourceBundle) {
+        // General initialization
+        parentTabPane.getStyleClass().add(TabPane.STYLE_CLASS_FLOATING);
+
         // Tester initialization
         StringBuilder sb = new StringBuilder();
         sb.append("Instruments:\n");
@@ -163,10 +166,14 @@ public class HomeController implements Initializable, EventHandler<MouseEvent> {
 
 
         // Composer initialization
-        noteHeaderColumn.setStyle("-fx-border-color: gray; -fx-border-width: 1px;");
-        sequencerGrid.setStyle("-fx-border-color: gray; -fx-border-width: 1px;");
+
+        // Remove all default container styling that causes separators/gaps and add support for translucency
+        noteHeaderColumn.setStyle("-fx-border-width: 0px");
+        sequencerGrid.setStyle("-fx-padding: 0; -fx-background-color: transparent; -fx-background-insets: 0; -fx-border-width: 0;");
+
+        // Note header column initialization
         Label labelRC = new Label("Note/Step");
-        labelRC.setStyle("-fx-text-fill: white; -fx-padding: 3px; -fx-background-color: rgba(255,255,255,0.2); -fx-border-color: gray; -fx-border-width: 1px;");
+        labelRC.setStyle("-fx-text-fill: white; -fx-padding: 3px; -fx-background-color: \"#333333\"; -fx-border-color: gray; -fx-border-width: 1px;");
         labelRC.setMaxWidth(Double.MAX_VALUE);
         HBox.setHgrow(labelRC, Priority.ALWAYS);
         labelRC.setAlignment(Pos.CENTER);
@@ -186,7 +193,8 @@ public class HomeController implements Initializable, EventHandler<MouseEvent> {
             private final VBox column = new VBox();
             private final Label stepLabel = new Label();
             {
-                setStyle("-fx-padding: 0px");
+                // Remove all default cell styling that causes separators/gaps and add support for translucency
+                setStyle("-fx-padding: 0; -fx-background-color: transparent; -fx-background-insets: 0; -fx-border-width: 0;");
 
                 VBox.setVgrow(column, Priority.ALWAYS);
                 column.setMinWidth(STEP_WIDTH);
@@ -195,7 +203,7 @@ public class HomeController implements Initializable, EventHandler<MouseEvent> {
                 column.setSpacing(0);
                 column.setAlignment(Pos.TOP_CENTER);
 
-                stepLabel.setStyle("-fx-text-fill: white; -fx-padding: 3px; -fx-background-color: rgba(255,255,255,0.2); -fx-border-color: gray; -fx-border-width: 1px;");
+                stepLabel.setStyle("-fx-text-fill: white; -fx-padding: 3px; -fx-background-color: \"#333333\"; -fx-border-color: gray; -fx-border-width: 1px;");
                 stepLabel.setMaxWidth(Double.MAX_VALUE);
                 HBox.setHgrow(stepLabel, Priority.ALWAYS);
                 stepLabel.setAlignment(Pos.CENTER);
@@ -267,7 +275,7 @@ public class HomeController implements Initializable, EventHandler<MouseEvent> {
             }
             virtualFlow = (VirtualFlow<ListCell<Step>>) sequencerGrid.lookup(".virtual-flow");
             noteHeaderColumn.paddingProperty().bind(Bindings.createObjectBinding(() -> {
-                double bottomPadding = hBar.isVisible() ? hBar.getHeight() + 1 : 0;
+                double bottomPadding = hBar.isVisible() ? hBar.getHeight() : 0;
                 return new Insets(0, 0, bottomPadding, 0);
             }, hBar.visibleProperty(), hBar.heightProperty()));
 

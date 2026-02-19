@@ -8,6 +8,7 @@ module com.uniqueapps.musemix {
     requires org.kordamp.ikonli.core;
     requires org.kordamp.ikonli.javafx;
     requires org.kordamp.ikonli.fontawesome6;
+    requires com.pixelduke.fxthemes;
 
     opens com.uniqueapps.musemix to javafx.fxml;
     exports com.uniqueapps.musemix;

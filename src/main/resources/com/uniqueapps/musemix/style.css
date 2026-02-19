@@ -3,8 +3,44 @@
     -fx-font-size: 14px;
 }
 
+/* TabPane styling start */
+.tab-pane > .tab-header-area {
+    -fx-background-color: -color-bg-default;
+}
+
+.tab-pane > .tab-header-area > .tab-header-background {
+    -fx-background-color: -color-bg-default;
+}
+
+.tab-pane > .tab-header-area > .headers-region {
+    -fx-background-color: -color-bg-default;
+}
+
+.tab-pane > .tab-header-area > .headers-region > .tab {
+    -fx-background-color: -color-bg-default;
+}
+
+.tab-pane > .tab-header-area > .headers-region > .tab:hover > .tab-container {
+    -fx-background-color: -color-accent-subtle;
+    -fx-background-radius: 8px;
+    -fx-border-width: 0px;
+}
+
+.tab-pane > .tab-header-area > .headers-region > .tab:selected > .tab-container {
+    -fx-background-color: -color-accent-emphasis;
+    -fx-background-radius: 8px;
+    -fx-border-width: 0px;
+}
+
+.tab-pane > .tab-header-area > .headers-region > .tab > .tab-container {
+    -fx-background-color: -color-neutral-muted;
+    -fx-background-radius: 8px;
+    -fx-border-width: 0px;
+}
+/* TabPane styling end */
+
 .general-toolbar-button {
-    -color-fg-default: "#2196F3";
+    -color-fg-default: -color-accent-emphasis;
 }
 
 .positive-toolbar-button {

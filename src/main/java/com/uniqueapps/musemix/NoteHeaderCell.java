@@ -14,7 +14,7 @@ public class NoteHeaderCell extends Label {
 
     public static final LinkedHashMap<Integer, String> NOTE_MAP = new LinkedHashMap<>();
     private static final LinkedHashMap<Integer, Background> NOTE_BACKGROUND_MAP = new LinkedHashMap<>();
-    private static final Background DEFAULT_BACKGROUND = new Background(new BackgroundFill(Color.rgb(255, 255, 255, 0.2), null, null));
+    private static final Background DEFAULT_BACKGROUND = new Background(new BackgroundFill(Color.web("#333333"), null, null));
     private static final Bloom BLOOM = new Bloom(0.6);
 
     private int note;

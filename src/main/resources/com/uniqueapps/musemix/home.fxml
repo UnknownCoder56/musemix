@@ -165,7 +165,7 @@
             </ToolBar>
             <ScrollPane fitToHeight="true" fitToWidth="true" VBox.vgrow="ALWAYS" hbarPolicy="NEVER">
                 <HBox VBox.vgrow="ALWAYS">
-                    <VBox VBox.vgrow="ALWAYS" fx:id="noteHeaderColumn" prefWidth="135" style="-fx-border-color: gray; -fx-border-width: 1px;" />
+                    <VBox VBox.vgrow="ALWAYS" fx:id="noteHeaderColumn" prefWidth="135" />
                     <StackPane VBox.vgrow="ALWAYS" HBox.hgrow="ALWAYS" maxWidth="Infinity" maxHeight="Infinity" alignment="TOP_LEFT">
                         <ListView fx:id="sequencerGrid" orientation="HORIZONTAL" cache="true" cacheHint="SPEED" focusTraversable="false" HBox.hgrow="ALWAYS" maxWidth="Infinity" maxHeight="Infinity" />
                         <Region fx:id="playheadOverlay" maxHeight="0" maxWidth="3" minHeight="0" minWidth="3" mouseTransparent="true" prefWidth="3" style="-fx-background-color: red;" visible="false" />

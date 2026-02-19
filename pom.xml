@@ -1,4 +1,32 @@
 <?xml version="1.0" encoding="UTF-8"?>
+<!--
+    ╔══════════════════════════════════════════════════════════════════════════════╗
+    ║                        MUSEMIX BUILD CONFIGURATION                           ║
+    ╠══════════════════════════════════════════════════════════════════════════════╣
+    ║  This pom.xml contains a complex but working jpackage setup for a modular    ║
+    ║  JavaFX application that depends on libraries with automatic modules (JNA).  ║
+    ║                                                                              ║
+    ║  THE PROBLEM:                                                                ║
+    ║  * jpackage internally uses jlink to create a custom JVM runtime             ║
+    ║  * jlink ONLY works with proper named modules (has module-info.class)        ║
+    ║  * fxthemes library has `requires com.sun.jna` in its module-info            ║
+    ║  * JNA is an AUTOMATIC MODULE (no module-info) => jlink refuses it           ║
+    ║  * JavaFX Maven deps include empty "stub" JARs (no classifier) that are      ║
+    ║    also automatic modules, alongside platform-specific JARs (*-win.jar)      ║
+    ║                                                                              ║
+    ║  THE SOLUTION (hybrid classpath + module-path approach):                     ║
+    ║  1. Put JavaFX platform JARs (*-win.jar) on module-path for jlink            ║
+    ║  2. Put everything else (app, fxthemes, JNA, ikonli, etc.) on input          ║
+    ║     which becomes the classpath (ALL-UNNAMED module)                         ║
+    ║  3. Use add-modules to include JavaFX in the runtime image                   ║
+    ║  4. Use add-opens targeting ALL-UNNAMED (since fxthemes is on classpath)     ║
+    ║                                                                              ║
+    ║  BUILD COMMANDS:                                                             ║
+    ║    Development run:     mvnw javafx:run                                      ║
+    ║    Create installer:    mvnw clean package -Pexport                          ║
+    ║    Native AOT (GraalVM): mvnw gluonfx:build                                  ║
+    ╚══════════════════════════════════════════════════════════════════════════════╝
+-->
 <project xmlns="http://maven.apache.org/POM/4.0.0"
          xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
          xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 https://maven.apache.org/xsd/maven-4.0.0.xsd">
@@ -14,6 +42,14 @@
         <maven.compiler.release>21</maven.compiler.release>
     </properties>
 
+    <!--
+        DEPENDENCIES NOTE:
+        * JavaFX deps (21.0.2) bring both stub JARs and platform-classified JARs (*-win.jar)
+        * fxthemes transitively depends on JNA (automatic module) which causes jlink issues
+        * All deps here are "compile" scope, but we split them at package time:
+          * JavaFX *-win.jar => module-path (for jlink to resolve JavaFX modules)
+          * Everything else => input/classpath (runs as ALL-UNNAMED)
+    -->
     <dependencies>
         <dependency>
             <groupId>org.openjfx</groupId>
@@ -23,7 +59,7 @@
         <dependency>
             <groupId>org.openjfx</groupId>
             <artifactId>javafx-fxml</artifactId>
-            <version>21</version>
+            <version>21.0.2</version>
         </dependency>
         <dependency>
             <groupId>io.github.mkpaz</groupId>
@@ -40,8 +76,34 @@
             <artifactId>ikonli-fontawesome6-pack</artifactId>
             <version>12.4.0</version>
         </dependency>
+        <dependency>
+            <groupId>com.pixelduke</groupId>
+            <artifactId>fxthemes</artifactId>
+            <version>1.5.1</version>
+        </dependency>
     </dependencies>
 
+    <!--
+        BUILD PLUGINS - PHASE EXECUTION ORDER:
+        ═══════════════════════════════════════════════════════════════════════════
+        For normal dev: mvnw javafx:run (just uses javafx-maven-plugin)
+
+        For export (mvnw clean package -Pexport):
+          compile phase:  maven-compiler-plugin compiles sources
+          package phase:  1. maven-jar-plugin creates musemix-2.0.jar
+                          2. maven-dependency-plugin copies all deps to target/libs/
+                          3. maven-antrun-plugin:
+                             - Deletes empty JavaFX stub JARs (automatic modules)
+                             - Moves non-JavaFX JARs to target/input/ (classpath)
+                             - Copies app JAR to target/input/
+                          4. jpackage-maven-plugin creates native installer
+
+        Result after package phase:
+          target/libs/        → Only JavaFX *-win.jar files (proper modules)
+          target/input/       → App JAR + all other deps (classpath JARs)
+          target/installer/   → Native Windows installer (.exe)
+        ═══════════════════════════════════════════════════════════════════════════
+    -->
     <build>
         <plugins>
             <plugin>
@@ -53,25 +115,228 @@
                     <target>21</target>
                 </configuration>
             </plugin>
+            <!-- For running locally: mvnw javafx:run -->
             <plugin>
                 <groupId>org.openjfx</groupId>
                 <artifactId>javafx-maven-plugin</artifactId>
                 <version>0.0.8</version>
+                <configuration>
+                    <mainClass>com.uniqueapps.musemix/com.uniqueapps.musemix.MusemixApplication</mainClass>
+                    <options>
+                        <option>--add-opens</option>
+                        <option>javafx.graphics/javafx.stage=com.pixelduke.fxthemes</option>
+                        <option>--add-opens</option>
+                        <option>javafx.graphics/com.sun.javafx.tk=com.pixelduke.fxthemes</option>
+                        <option>--add-opens</option>
+                        <option>javafx.graphics/com.sun.javafx.tk.quantum=com.pixelduke.fxthemes</option>
+                    </options>
+                </configuration>
+            </plugin>
+            <!-- Build the application JAR with main class manifest -->
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-jar-plugin</artifactId>
+                <version>3.3.0</version>
+                <configuration>
+                    <archive>
+                        <manifest>
+                            <mainClass>com.uniqueapps.musemix.MusemixApplication</mainClass>
+                        </manifest>
+                    </archive>
+                </configuration>
+            </plugin>
+            <!-- Copy all compile-scope dependencies to target/libs -->
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-dependency-plugin</artifactId>
+                <version>3.6.1</version>
                 <executions>
                     <execution>
-                        <!-- Default configuration for running with: mvn clean javafx:run -->
-                        <id>default-cli</id>
+                        <id>copy-deps</id>
+                        <phase>package</phase>
+                        <goals>
+                            <goal>copy-dependencies</goal>
+                        </goals>
                         <configuration>
-                            <mainClass>com.uniqueapps.musemix/com.uniqueapps.musemix.MusemixApplication</mainClass>
-                            <launcher>musemix</launcher>
-                            <jlinkZipName>musemix</jlinkZipName>
-                            <jlinkImageName>musemix</jlinkImageName>
-                            <noManPages>true</noManPages>
-                            <stripDebug>true</stripDebug>
-                            <noHeaderFiles>true</noHeaderFiles>
+                            <outputDirectory>${project.build.directory}/libs</outputDirectory>
                         </configuration>
                     </execution>
                 </executions>
+            </plugin>
+            <!--
+                ANTRUN: The "fishy" JAR reorganization step
+                ═══════════════════════════════════════════════════════════════════
+                WHY THIS EXISTS:
+                * Maven copies ALL JavaFX JARs: both stubs (javafx-fxml-21.0.2.jar)
+                  and platform JARs (javafx-fxml-21.0.2-win.jar)
+                * The stub JARs are EMPTY and are automatic modules => breaks jlink
+                * JNA JARs are also automatic modules => can't be on module-path
+                * Solution: Delete stubs, keep only *-win.jar in libs/ for module-path,
+                  move everything else to input/ for classpath
+
+                RESULT:
+                  target/libs/  = javafx-*-win.jar only (4 files, proper modules)
+                  target/input/ = app.jar + fxthemes + JNA + ikonli + atlantafx
+                ═══════════════════════════════════════════════════════════════════
+            -->
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-antrun-plugin</artifactId>
+                <version>3.1.0</version>
+                <executions>
+                    <execution>
+                        <id>reorganize-jars-for-jpackage</id>
+                        <phase>package</phase>
+                        <goals>
+                            <goal>run</goal>
+                        </goals>
+                        <configuration>
+                            <target>
+                                <!-- Create input dir for classpath JARs -->
+                                <mkdir dir="${project.build.directory}/input"/>
+
+                                <!--
+                                    STEP 1: Delete empty JavaFX stub JARs
+                                    These are the non-classifier JARs (e.g., javafx-fxml-21.0.2.jar)
+                                    They contain no code, just Maven metadata, and are automatic modules.
+                                    We keep *-win.jar which have the actual platform-specific code.
+                                -->
+                                <delete>
+                                    <fileset dir="${project.build.directory}/libs">
+                                        <include name="javafx-base-*.jar"/>
+                                        <include name="javafx-controls-*.jar"/>
+                                        <include name="javafx-fxml-*.jar"/>
+                                        <include name="javafx-graphics-*.jar"/>
+                                        <exclude name="*-win.jar"/>
+                                    </fileset>
+                                </delete>
+
+                                <!--
+                                    STEP 2: Move non-JavaFX JARs to input/ (classpath)
+                                    This includes: fxthemes, JNA, ikonli, atlantafx
+                                    These can't be on module-path because:
+                                    * JNA is an automatic module (no module-info)
+                                    * fxthemes requires JNA, so if JNA isn't resolvable, fxthemes fails
+                                    By putting them on classpath, they become ALL-UNNAMED module.
+                                -->
+                                <move todir="${project.build.directory}/input">
+                                    <fileset dir="${project.build.directory}/libs">
+                                        <include name="*.jar"/>
+                                        <exclude name="javafx-*-win.jar"/>
+                                    </fileset>
+                                </move>
+
+                                <!--
+                                    STEP 3: Copy app JAR to input/
+                                    Our app JAR also goes on classpath because it imports fxthemes
+                                    which is now on classpath. Module system would complain otherwise.
+                                -->
+                                <copy file="${project.build.directory}/${project.build.finalName}.jar"
+                                      todir="${project.build.directory}/input"/>
+                            </target>
+                        </configuration>
+                    </execution>
+                </executions>
+            </plugin>
+            <!--
+                JPACKAGE: Native installer creation
+                ═══════════════════════════════════════════════════════════════════
+                This is a HYBRID setup, not fully modular, not fully classpath:
+                * module-path points to JavaFX JARs (proper modules for jlink)
+                * input points to app + deps (classpath, ALL-UNNAMED)
+                * add-modules tells jlink which modules to include in runtime
+                * add-opens targets ALL-UNNAMED (not named module) because
+                  fxthemes is on classpath
+
+                WHY NOT FULLY MODULAR (module mode):
+                  fxthemes requires JNA, JNA is automatic module, jlink rejects it
+
+                WHY NOT FULLY CLASSPATH (no module-path):
+                  JavaFX must be in the runtime image, and jlink needs to find it
+                  on module-path to include it via add-modules
+                ═══════════════════════════════════════════════════════════════════
+            -->
+            <plugin>
+                <groupId>org.panteleyev</groupId>
+                <artifactId>jpackage-maven-plugin</artifactId>
+                <version>1.6.5</version>
+                <configuration>
+                    <!-- Basic app info -->
+                    <name>Musemix</name>
+                    <appVersion>${project.version}</appVersion>
+                    <vendor>UnknownCoder56</vendor>
+                    <description>MIDI player, visualizer and composer</description>
+
+                    <!--
+                        CLASSPATH MODE: Using main-jar + main-class instead of module
+                        This puts the app on classpath (ALL-UNNAMED) rather than module-path.
+                        Required because our deps include automatic modules (JNA).
+                    -->
+                    <mainJar>${project.build.finalName}.jar</mainJar>
+                    <mainClass>com.uniqueapps.musemix.MusemixApplication</mainClass>
+
+                    <!--
+                        INPUT: Directory containing classpath JARs
+                        Contains: app.jar, fxthemes, JNA, ikonli, atlantafx
+                        These all run as ALL-UNNAMED module at runtime.
+                    -->
+                    <input>${project.build.directory}/input</input>
+
+                    <!--
+                        MODULE-PATH: Directory containing proper module JARs
+                        Contains: ONLY javafx-*-win.jar files (4 JARs)
+                        jlink uses this to resolve add-modules and build the runtime.
+                    -->
+                    <modulePaths>
+                        <modulePath>${project.build.directory}/libs</modulePath>
+                    </modulePaths>
+
+                    <destination>${project.build.directory}/installer</destination>
+                    <icon>${project.basedir}/src/main/resources/com/uniqueapps/musemix/logo.ico</icon>
+
+                    <!--
+                        ADD-MODULES: Modules to include in the jlink runtime image
+                        These are resolved from module-path (JavaFX) + JDK modules.
+                        The app itself is NOT a module here (it's on classpath).
+                    -->
+                    <addModules>
+                        <addModule>javafx.controls</addModule>
+                        <addModule>javafx.fxml</addModule>
+                        <addModule>javafx.graphics</addModule>
+                        <addModule>java.desktop</addModule>
+                        <addModule>java.xml.crypto</addModule>
+                    </addModules>
+
+                    <!--
+                        JAVA OPTIONS: Runtime flags baked into the launcher
+
+                        IMPORTANT: We use ALL-UNNAMED instead of com.pixelduke.fxthemes!
+                        Because fxthemes is on classpath (input dir), not module-path,
+                        it runs as part of the unnamed module. The add-opens must
+                        target ALL-UNNAMED for the reflection to work.
+
+                        These opens are required by fxthemes for window theming:
+                        * javafx.stage: Window decoration access
+                        * com.sun.javafx.tk: Toolkit internals
+                        * com.sun.javafx.tk.quantum: Quantum toolkit (Windows rendering)
+                    -->
+                    <javaOptions>
+                        <option>--add-opens</option>
+                        <option>javafx.graphics/javafx.stage=ALL-UNNAMED</option>
+                        <option>--add-opens</option>
+                        <option>javafx.graphics/com.sun.javafx.tk=ALL-UNNAMED</option>
+                        <option>--add-opens</option>
+                        <option>javafx.graphics/com.sun.javafx.tk.quantum=ALL-UNNAMED</option>
+                    </javaOptions>
+
+                    <!-- Windows-specific installer options -->
+                    <winDirChooser>true</winDirChooser>
+                    <winMenu>true</winMenu>
+                    <winMenuGroup>Musemix</winMenuGroup>
+                    <winShortcut>true</winShortcut>
+                    <winShortcutPrompt>true</winShortcutPrompt>
+                    <winPerUserInstall>true</winPerUserInstall>
+                </configuration>
             </plugin>
             <plugin>
                 <groupId>com.gluonhq</groupId>
@@ -115,4 +380,45 @@
             </plugin>
         </plugins>
     </build>
+
+    <profiles>
+        <!--
+            EXPORT PROFILE: mvnw clean package -Pexport
+            ═══════════════════════════════════════════════════════════════════════
+            This profile binds jpackage to the 'package' phase so everything
+            runs in a single command. Without this profile, jpackage-maven-plugin
+            has no execution binding and won't run automatically.
+
+            WHY package PHASE:
+            * maven-dependency-plugin runs at package phase (copies deps)
+            * maven-antrun-plugin runs at package phase (reorganizes JARs)
+            * jpackage needs both to complete first, so it also runs at package
+            * Using 'install' phase would work but requires extra lifecycle step
+
+            The <configuration> is inherited from the main <build> section,
+            so we only need to add the <executions> binding here.
+            ═══════════════════════════════════════════════════════════════════════
+        -->
+        <profile>
+            <id>export</id>
+            <build>
+                <plugins>
+                    <plugin>
+                        <groupId>org.panteleyev</groupId>
+                        <artifactId>jpackage-maven-plugin</artifactId>
+                        <version>1.6.5</version>
+                        <executions>
+                            <execution>
+                                <id>jpackage</id>
+                                <phase>package</phase>
+                                <goals>
+                                    <goal>jpackage</goal>
+                                </goals>
+                            </execution>
+                        </executions>
+                    </plugin>
+                </plugins>
+            </build>
+        </profile>
+    </profiles>
 </project>
