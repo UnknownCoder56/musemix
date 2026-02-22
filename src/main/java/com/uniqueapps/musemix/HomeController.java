@@ -285,7 +285,11 @@ public class HomeController implements Initializable, EventHandler<MouseEvent> {
             Window window = sequencerGrid.getScene().getWindow();
             if (window instanceof javafx.stage.Stage stage) {
                 stage.maximizedProperty().addListener((obs, wasMaximized, isMaximized) ->
-                        Platform.runLater(() -> virtualFlow.requestLayout()));
+                        Platform.runLater(() -> {
+                            if (virtualFlow != null) {
+                                virtualFlow.requestLayout();
+                            }
+                        }));
             }
         });
 
@@ -763,99 +767,6 @@ public class HomeController implements Initializable, EventHandler<MouseEvent> {
     }
 
     @FXML
-    private void exportMidiClicked() {
-        FileChooser fileChooser = new FileChooser();
-        fileChooser.setTitle("Export MIDI File");
-        fileChooser.getExtensionFilters().add(new FileChooser.ExtensionFilter("MIDI Files (*.mid)", "*.mid"));
-        fileChooser.setInitialFileName("composition.mid");
-        File file = fileChooser.showSaveDialog(sequencerGrid.getScene().getWindow());
-        if (file == null) return;
-
-        Dialog<Void> waitDialog = new Dialog<>();
-        waitDialog.setTitle("Exporting Composition");
-        waitDialog.setHeaderText("Processing MIDI data...");
-        ProgressIndicator progress = new ProgressIndicator();
-        progress.setProgress(-1);
-        StackPane progressPane = new StackPane();
-        progressPane.getChildren().add(progress);
-        StackPane.setAlignment(progress, Pos.CENTER);
-        waitDialog.getDialogPane().setContent(progressPane);
-        Window waitDialogWindow = waitDialog.getDialogPane().getScene().getWindow();
-        waitDialog.show();
-
-        Thread.startVirtualThread(() -> {
-            try {
-                int resolution = 480;
-                int ticksPerStep = resolution / 4;
-                Sequence sequence = new Sequence(Sequence.PPQ, resolution);
-                int microsecondsPerBeat = 60000000 / tempo;
-                byte[] tempoData = new byte[]{
-                        (byte) ((microsecondsPerBeat >> 16) & 0xFF),
-                        (byte) ((microsecondsPerBeat >> 8) & 0xFF),
-                        (byte) (microsecondsPerBeat & 0xFF)
-                };
-                Map<Integer, Track> instrumentTracks = new HashMap<>();
-                for (int r = 1; r < noteHeaderColumn.getChildren().size(); r++) {
-                    NoteHeaderCell noteHeaderCell = (NoteHeaderCell) noteHeaderColumn.getChildren().get(r);
-                    if (noteHeaderCell == null) continue;
-                    int noteValue = noteHeaderCell.getNote();
-                    for (int c = 0; c < steps.size(); c++) {
-                        InstrumentCellData cell = steps.get(c).getCells().get(r - 1);
-                        if (cell == null || cell.getInstrument() == InstrumentCellData.INACTIVE) continue;
-                        int instr = cell.getInstrument();
-                        int dur = cell.getDuration();
-                        boolean isDrum = (instr == InstrumentCellData.DRUM);
-                        int channel = isDrum ? 9 : (instr % 16 == 9 ? 10 : instr % 16);
-                        int program = isDrum ? 0 : instr;
-                        Track track = instrumentTracks.computeIfAbsent(instr, k -> {
-                            Track t = sequence.createTrack();
-                            try {
-                                if (instrumentTracks.isEmpty()) {
-                                    MetaMessage tempoMessage = new MetaMessage();
-                                    tempoMessage.setMessage(0x51, tempoData, 3);
-                                    t.add(new MidiEvent(tempoMessage, 0));
-                                }
-                                if (!isDrum) {
-                                    ShortMessage programChange = new ShortMessage();
-                                    programChange.setMessage(ShortMessage.PROGRAM_CHANGE, channel, program, 0);
-                                    t.add(new MidiEvent(programChange, 0));
-                                }
-                            } catch (Exception ignored) {
-                            }
-                            return t;
-                        });
-                        long startTick = (long) c * ticksPerStep;
-                        long endTick = startTick + (long) dur * ticksPerStep;
-                        ShortMessage noteOn = new ShortMessage();
-                        noteOn.setMessage(ShortMessage.NOTE_ON, channel, noteValue, 100);
-                        track.add(new MidiEvent(noteOn, startTick));
-                        ShortMessage noteOff = new ShortMessage();
-                        noteOff.setMessage(ShortMessage.NOTE_OFF, channel, noteValue, 0);
-                        track.add(new MidiEvent(noteOff, endTick));
-                    }
-                }
-                if (instrumentTracks.isEmpty()) {
-                    Platform.runLater(() -> {
-                        waitDialogWindow.hide();
-                        new Alert(Alert.AlertType.WARNING, "No notes to export").showAndWait();
-                    });
-                    return;
-                }
-                MidiSystem.write(sequence, 1, file);
-                Platform.runLater(() -> Platform.runLater(() -> {
-                    waitDialogWindow.hide();
-                    new Alert(Alert.AlertType.INFORMATION, "MIDI exported successfully!").showAndWait();
-                }));
-            } catch (Exception e) {
-                Platform.runLater(() -> {
-                    waitDialogWindow.hide();
-                    new Alert(Alert.AlertType.ERROR, "Failed to export MIDI: " + e.getMessage()).showAndWait();
-                });
-            }
-        });
-    }
-
-    @FXML
     private void importMidiClicked() {
         FileChooser fileChooser = new FileChooser();
         fileChooser.setTitle("Import MIDI File");
@@ -877,6 +788,7 @@ public class HomeController implements Initializable, EventHandler<MouseEvent> {
 
         Thread.startVirtualThread(() -> {
             try {
+                // Decipher sequence tracks into note events
                 Sequence sequence = MidiSystem.getSequence(file);
                 int resolution = sequence.getResolution();
                 int midiTempo = 500000;
@@ -926,6 +838,7 @@ public class HomeController implements Initializable, EventHandler<MouseEvent> {
                         }
                     }
                 }
+                // Return if file was empty or invalid
                 if (noteEvents.isEmpty()) {
                     Platform.runLater(() -> {
                         waitDialogWindow.hide();
@@ -933,6 +846,7 @@ public class HomeController implements Initializable, EventHandler<MouseEvent> {
                     });
                     return;
                 }
+                // Load notes into main 2D list and durations into another 2D list
                 int bpm = (int) Math.round(60000000.0 / midiTempo);
                 long maxTick = noteEvents.stream().mapToLong(e -> e.startTick + (long) e.durationSteps * ticksPerStep).max().orElse(0);
                 int totalSteps = (int) ((maxTick / ticksPerStep) + 1);
@@ -958,28 +872,22 @@ public class HomeController implements Initializable, EventHandler<MouseEvent> {
                         durations.get(rowIndex).set(step, ne.durationSteps);
                     }
                 }
-                CountDownLatch clearLatch = new CountDownLatch(1);
-                Platform.runLater(() -> {
-                    clearGrid();
-                    clearLatch.countDown();
-                });
-                clearLatch.await();
+                // Set tempo to deciphered value
                 tempo = bpm;
+                // Put note header cells into intermediate list for later UI addition
+                NoteHeaderCell[] notesToAdd = new NoteHeaderCell[notes.size()];
                 for (int i = 0; i < notes.size(); i++) {
                     int noteValue = notes.get(i);
                     NoteHeaderCell noteHeaderCell = new NoteHeaderCell(this, noteValue, i + 1, 0);
-                    int finalI = i;
-                    Platform.runLater(() -> noteHeaderColumn.getChildren().add(finalI + 1, noteHeaderCell));
+                    notesToAdd[i] = noteHeaderCell;
                 }
+                // Put steps into intermediate list for later UI addition
+                Step[] stepsToAdd = new Step[totalSteps];
                 for (int c = 1; c <= totalSteps; c++) {
                     Step step = new Step(c);
-                    CountDownLatch stepLatch = new CountDownLatch(1);
-                    Platform.runLater(() -> {
-                        steps.add(step);
-                        stepLatch.countDown();
-                    });
-                    stepLatch.await();
+                    stepsToAdd[c - 1] = step;
                 }
+                // Put notes (instrument cells) into intermediate steps list with proper data (take note of row-by-row addition unlike column-by-column steps list due to row-based grids' (2D lists') data
                 for (int r = 0; r < grid.size(); r++) {
                     List<Integer> row = grid.get(r);
                     List<Integer> durRow = durations.get(r);
@@ -990,13 +898,23 @@ public class HomeController implements Initializable, EventHandler<MouseEvent> {
                         if (instr != InstrumentCellData.INACTIVE) {
                             instrumentCellData.setInstrumentAndDuration(instr, dur, orchestra);
                         }
-                        int finalC = c;
-                        int finalR = r;
-                        Platform.runLater(() -> steps.get(finalC).getCells().add(finalR, instrumentCellData));
+                        stepsToAdd[c].getCells().add(r, instrumentCellData);
                     }
                 }
+                // Finally, we take all intermediate data and update UI on FX thread at once to avoid multiple refreshes and freezing
+                // Double Platform.runLater to avoid ghost image of dialog before processing finishes
                 Platform.runLater(() -> Platform.runLater(() -> {
-                    createTimeline();
+                    clearGrid();
+                    noteHeaderColumn.getChildren().addAll(notesToAdd);
+                    steps.addAll(stepsToAdd);
+                    // Defer tasks which need to happen after above tasks finish
+                    Platform.runLater(() -> {
+                        // Force VirtualFlow layout refresh to fix clipped first/last cells after addAll
+                        if (virtualFlow != null) {
+                            virtualFlow.requestLayout();
+                        }
+                        createTimeline();
+                    });
                     waitDialogWindow.hide();
                     new Alert(Alert.AlertType.INFORMATION, "MIDI imported: " + notes.size() + " notes, " + totalSteps + " steps, " + bpm + " BPM").showAndWait();
                 }));
@@ -1004,6 +922,102 @@ public class HomeController implements Initializable, EventHandler<MouseEvent> {
                 Platform.runLater(() -> {
                     waitDialogWindow.hide();
                     new Alert(Alert.AlertType.ERROR, "Failed to import MIDI: " + e.getMessage()).showAndWait();
+                });
+            }
+        });
+    }
+
+    @FXML
+    private void exportMidiClicked() {
+        FileChooser fileChooser = new FileChooser();
+        fileChooser.setTitle("Export MIDI File");
+        fileChooser.getExtensionFilters().add(new FileChooser.ExtensionFilter("MIDI Files (*.mid)", "*.mid"));
+        fileChooser.setInitialFileName("composition.mid");
+        File file = fileChooser.showSaveDialog(sequencerGrid.getScene().getWindow());
+        if (file == null) return;
+
+        Dialog<Void> waitDialog = new Dialog<>();
+        waitDialog.setTitle("Exporting Composition");
+        waitDialog.setHeaderText("Processing MIDI data...");
+        ProgressIndicator progress = new ProgressIndicator();
+        progress.setProgress(-1);
+        StackPane progressPane = new StackPane();
+        progressPane.getChildren().add(progress);
+        StackPane.setAlignment(progress, Pos.CENTER);
+        waitDialog.getDialogPane().setContent(progressPane);
+        Window waitDialogWindow = waitDialog.getDialogPane().getScene().getWindow();
+        waitDialog.show();
+
+        Thread.startVirtualThread(() -> {
+            try {
+                // Load note events from sequencerGrid and put into sequence tracks
+                int resolution = 480;
+                int ticksPerStep = resolution / 4;
+                Sequence sequence = new Sequence(Sequence.PPQ, resolution);
+                int microsecondsPerBeat = 60000000 / tempo;
+                byte[] tempoData = new byte[]{
+                        (byte) ((microsecondsPerBeat >> 16) & 0xFF),
+                        (byte) ((microsecondsPerBeat >> 8) & 0xFF),
+                        (byte) (microsecondsPerBeat & 0xFF)
+                };
+                Map<Integer, Track> instrumentTracks = new HashMap<>();
+                for (int r = 1; r < noteHeaderColumn.getChildren().size(); r++) {
+                    NoteHeaderCell noteHeaderCell = (NoteHeaderCell) noteHeaderColumn.getChildren().get(r);
+                    if (noteHeaderCell == null) continue;
+                    int noteValue = noteHeaderCell.getNote();
+                    for (int c = 0; c < steps.size(); c++) {
+                        InstrumentCellData cell = steps.get(c).getCells().get(r - 1);
+                        if (cell == null || cell.getInstrument() == InstrumentCellData.INACTIVE) continue;
+                        int instr = cell.getInstrument();
+                        int dur = cell.getDuration();
+                        boolean isDrum = (instr == InstrumentCellData.DRUM);
+                        int channel = isDrum ? 9 : (instr % 16 == 9 ? 10 : instr % 16);
+                        int program = isDrum ? 0 : instr;
+                        Track track = instrumentTracks.computeIfAbsent(instr, k -> {
+                            Track t = sequence.createTrack();
+                            try {
+                                if (instrumentTracks.isEmpty()) {
+                                    MetaMessage tempoMessage = new MetaMessage();
+                                    tempoMessage.setMessage(0x51, tempoData, 3);
+                                    t.add(new MidiEvent(tempoMessage, 0));
+                                }
+                                if (!isDrum) {
+                                    ShortMessage programChange = new ShortMessage();
+                                    programChange.setMessage(ShortMessage.PROGRAM_CHANGE, channel, program, 0);
+                                    t.add(new MidiEvent(programChange, 0));
+                                }
+                            } catch (Exception ignored) {
+                            }
+                            return t;
+                        });
+                        long startTick = (long) c * ticksPerStep;
+                        long endTick = startTick + (long) dur * ticksPerStep;
+                        ShortMessage noteOn = new ShortMessage();
+                        noteOn.setMessage(ShortMessage.NOTE_ON, channel, noteValue, 100);
+                        track.add(new MidiEvent(noteOn, startTick));
+                        ShortMessage noteOff = new ShortMessage();
+                        noteOff.setMessage(ShortMessage.NOTE_OFF, channel, noteValue, 0);
+                        track.add(new MidiEvent(noteOff, endTick));
+                    }
+                }
+                // Return if sequencerGrid was empty
+                if (instrumentTracks.isEmpty()) {
+                    Platform.runLater(() -> {
+                        waitDialogWindow.hide();
+                        new Alert(Alert.AlertType.WARNING, "No notes to export").showAndWait();
+                    });
+                    return;
+                }
+                MidiSystem.write(sequence, 1, file);
+                // Double Platform.runLater to avoid ghost image of dialog before processing finishes
+                Platform.runLater(() -> Platform.runLater(() -> {
+                    waitDialogWindow.hide();
+                    new Alert(Alert.AlertType.INFORMATION, "MIDI exported successfully!").showAndWait();
+                }));
+            } catch (Exception e) {
+                Platform.runLater(() -> {
+                    waitDialogWindow.hide();
+                    new Alert(Alert.AlertType.ERROR, "Failed to export MIDI: " + e.getMessage()).showAndWait();
                 });
             }
         });

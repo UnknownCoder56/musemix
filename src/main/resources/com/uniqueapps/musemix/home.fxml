@@ -146,20 +146,20 @@
                     </padding>
                 </StackPane>
                 <Separator orientation="VERTICAL" />
-                <Button fx:id="exportMidiButton" mnemonicParsing="false" onAction="#exportMidiClicked" focusTraversable="false">
-                    <graphic>
-                        <FontIcon iconLiteral="fas-file-export" iconSize="16" styleClass="general-toolbar-button" />
-                    </graphic>
-                    <tooltip>
-                        <Tooltip text="Export MIDI" />
-                    </tooltip>
-                </Button>
                 <Button fx:id="importMidiButton" mnemonicParsing="false" onAction="#importMidiClicked" focusTraversable="false">
                     <graphic>
                         <FontIcon iconLiteral="fas-file-import" iconSize="16" styleClass="general-toolbar-button" />
                     </graphic>
                     <tooltip>
                         <Tooltip text="Import MIDI" />
+                    </tooltip>
+                </Button>
+                <Button fx:id="exportMidiButton" mnemonicParsing="false" onAction="#exportMidiClicked" focusTraversable="false">
+                    <graphic>
+                        <FontIcon iconLiteral="fas-file-export" iconSize="16" styleClass="general-toolbar-button" />
+                    </graphic>
+                    <tooltip>
+                        <Tooltip text="Export MIDI" />
                     </tooltip>
                 </Button>
             </ToolBar>
